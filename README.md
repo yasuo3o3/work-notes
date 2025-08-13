@@ -1,7 +1,11 @@
 # work-notes
 作業メモプラグイン
 （このリポジトリは作業メモのためのWordPressプラグインです。）
+
+---
+
 <img width="1155" height="570" alt="image" src="https://github.com/user-attachments/assets/25df5376-536f-4970-9b54-d25ce85a0e98" />
+
 ---
 
 ## 📌 特徴
@@ -9,6 +13,7 @@
 - 作業依頼書といっても記載するのは作業者で、作業メモの様なものです
 - いつ・誰が・どんな指示を出したから、この作業をいつ・どうしたかをワードプレス上で残すためのものです
 <img width="1159" height="554" alt="image" src="https://github.com/user-attachments/assets/f4a55cdc-bfe4-49e3-9e07-cb4830667b5b" />
+
 ---
 
 ## 🚀 インストール方法
