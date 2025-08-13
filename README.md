@@ -27,7 +27,9 @@
 ## ⚙️ 動作環境
 - WordPress 6.x
 - PHP 7.4+（推奨8.1+）
-<img width="1169" height="541" alt="Image" src="https://github.com/user-attachments/assets/2d1cbb36-ca6e-4e2e-958f-c9406ed08701" />
+<img width="1155" height="570" alt="image" src="https://github.com/user-attachments/assets/25df5376-536f-4970-9b54-d25ce85a0e98" />
+<img width="1159" height="554" alt="image" src="https://github.com/user-attachments/assets/f4a55cdc-bfe4-49e3-9e07-cb4830667b5b" />
+
 ---
 
 ## 📂 ディレクトリ構成
