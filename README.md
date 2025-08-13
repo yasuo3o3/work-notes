@@ -14,7 +14,7 @@
 ## 🚀 インストール方法
 1. このリポジトリをクローンします
    ```bash
-   git clone https://github.com/ユーザー名/リポジトリ名.git
+   git clone https://github.com/yasuo3o3/work-notes.git
    ```
 2. 必要な依存関係をインストールします（ある場合）
    ```bash
