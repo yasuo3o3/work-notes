@@ -3,6 +3,24 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and uses Semantic Versioning.
 
 ## [Unreleased]
+## [0.1.1] - 2025-08-10
+### Changed
+- Initial commit
+- Update README.md
+- Update README.md
+- 初期作成
+- インストール方法の変更
+- インストール方法の修正
+- 動作環境の追加
+- アイコン変更
+- Update README.md
+- Update README.md
+- Update README.md
+- Update README.md
+- CHANGELOG.mdの作成
+- インストール方法を変更
+- インストール方法を変更
+
 
 ## [0.1.0] - 2025-08-13
 ### Added
