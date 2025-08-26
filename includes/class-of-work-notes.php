@@ -10,6 +10,9 @@ class OF_Work_Notes {
     public function __construct() {
         add_action('init', [$this, 'register_cpt']);
         add_action('init', [$this, 'register_meta_fields']);
+        
+        // 作業ログ機能を初期化
+        $this->init_worklog_features();
         add_action('add_meta_boxes', [$this, 'add_meta_boxes']);
         add_action('save_post', [$this, 'save_note_meta']);
         add_action('save_post', [$this, 'capture_quick_note_from_parent'], 20, 2);
@@ -27,6 +30,28 @@ class OF_Work_Notes {
 
         // 作業一覧ページ
         add_action('admin_menu', [$this, 'add_list_page']);
+    }
+    
+    /**
+     * 作業ログ促し機能を初期化
+     */
+    private function init_worklog_features() {
+        // 設定クラスを初期化
+        if (!class_exists('OFWN_Worklog_Settings')) {
+            require_once OFWN_DIR . 'includes/class-worklog-settings.php';
+        }
+        new OFWN_Worklog_Settings();
+        
+        // メタデータクラスを初期化
+        if (!class_exists('OFWN_Worklog_Meta')) {
+            require_once OFWN_DIR . 'includes/class-worklog-meta.php';
+        }
+        new OFWN_Worklog_Meta();
+        
+        // エディタ統合（管理画面のみ）
+        if (is_admin()) {
+            add_action('admin_enqueue_scripts', [$this, 'enqueue_worklog_editor_assets']);
+        }
     }
 
     /* ===== 基本 ===== */
@@ -646,5 +671,73 @@ class OF_Work_Notes {
         $table->views();
         $table->display();
         echo '</form></div>';
+    }
+    
+    /**
+     * 作業ログエディタ用アセットを読み込み
+     */
+    public function enqueue_worklog_editor_assets($hook) {
+        // 投稿編集画面のみで読み込み
+        if (!in_array($hook, ['post.php', 'post-new.php'])) {
+            return;
+        }
+        
+        $screen = get_current_screen();
+        if (!$screen) return;
+        
+        // 対象投稿タイプかどうかチェック
+        if (!class_exists('OFWN_Worklog_Settings') || 
+            !OFWN_Worklog_Settings::is_target_post_type($screen->post_type)) {
+            return;
+        }
+        
+        // 対象ユーザーかどうかチェック
+        if (!OFWN_Worklog_Settings::is_target_user()) {
+            return;
+        }
+        
+        // Gutenberg エディタかどうかチェック
+        if (!$this->is_gutenberg_page()) {
+            return;
+        }
+        
+        wp_enqueue_script(
+            'ofwn-worklog-editor',
+            OFWN_URL . 'assets/worklog-editor.js',
+            ['wp-data', 'wp-element', 'wp-i18n', 'wp-api-fetch'],
+            filemtime(OFWN_DIR . 'assets/worklog-editor.js'),
+            true
+        );
+        
+        wp_localize_script('ofwn-worklog-editor', 'ofwnWorklogEditor', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('ofwn_worklog_nonce'),
+            'post_id' => get_the_ID(),
+            'autoHideDelay' => 10000, // 10秒で自動消失
+            'strings' => [
+                'prompt_message' => apply_filters('of_worklog_snackbar_message', __('今回の変更の作業ログを残しますか？', 'work-notes')),
+                'write_now' => __('今すぐ書く', 'work-notes'),
+                'skip_this_time' => __('今回はスルー', 'work-notes'),
+                'fallback_prompt' => __('作業ログを入力してください（空の場合はスキップされます）:', 'work-notes')
+            ]
+        ]);
+    }
+    
+    /**
+     * Gutenberg エディタであるかどうか判定
+     */
+    private function is_gutenberg_page() {
+        // WordPress 5.0+ の Gutenberg エディタチェック
+        if (function_exists('is_gutenberg_page') && is_gutenberg_page()) {
+            return true;
+        }
+        
+        // ブロックエディタが有効かどうか
+        if (function_exists('use_block_editor_for_post')) {
+            global $post;
+            return $post && use_block_editor_for_post($post);
+        }
+        
+        return false;
     }
 }
