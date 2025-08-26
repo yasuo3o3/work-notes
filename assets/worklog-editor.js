@@ -1,6 +1,6 @@
 /**
- * 作業ログ促し（Snackbar）エディタ統合JavaScript
- * Gutenberg エディタで保存後に作業ログ記録を促すSnackbarを表示
+ * 作業ログ促し（固定通知）エディタ統合JavaScript
+ * Gutenberg エディタで保存後に作業ログ記録を促す上部固定通知を表示
  */
 (function() {
     'use strict';
@@ -8,408 +8,276 @@
     // デバッグログのON/OFF制御
     const DEBUG_WORKLOG = true;
     
-    function debugLog(...args) {
+    function debugLog(type, message, data = {}) {
         if (DEBUG_WORKLOG) {
-            console.debug('[worklog]', ...args);
+            console.debug(`[worklog][${type}]`, message, data);
         }
     }
     
     // WordPress の必要なコンポーネントを取得
     const { select, subscribe, dispatch } = wp.data;
-    const { __ } = wp.i18n;
-    const { createNotice, removeNotice } = dispatch('core/notices');
     
     // 状態管理
     let isInitialized = false;
     let subscriptionHandle = null;
-    let lastSaveState = null;
+    let prevState = null;
     let currentPostId = null;
-    let worklogNoticeId = 'ofwn-worklog-prompt';
+    let worklogNoticeId = 'ofwn-worklog-notice';
     
-    // 再入防止・多重実行防止フラグ
-    let handlerRunning = false;
-    let showingNotice = false;
-    let lastHandledAt = 0; // 同一保存サイクルでの多重実行防止
-    
-    // 保存サイクル管理（1サイクル=1回表示）
+    // サイクル管理（1サイクル=1回表示）
     let saveCycleId = 0;
     let shownInThisCycle = false;
-    
-    // 編集内容ハッシュとクールダウン管理
-    let lastEditHash = null;
-    let suppressUntil = 0;
+    let wasDirtyBeforeSave = false;
+    let lastNoticeAt = 0; // デバウンス用
     
     /**
-     * 編集内容のフィンガープリントを算出（軽量32bitハッシュ）
+     * 単一購読管理（二重登録防止）
      */
-    function computeEditHash() {
+    function ensureSingleSubscribe() {
+        if (subscriptionHandle) {
+            debugLog('sub', 'subscription already exists, skipping');
+            return;
+        }
+        
+        debugLog('sub', 'setting up single subscription');
+        subscriptionHandle = subscribe(saveStateMonitor);
+    }
+    
+    /**
+     * 保存状態監視（メインハンドラー）
+     */
+    function saveStateMonitor() {
         try {
             const editorSel = select('core/editor');
-            if (!editorSel) return 0;
+            if (!editorSel) return;
             
-            const content = {
-                t: editorSel.getEditedPostAttribute('title') || '',
-                c: editorSel.getEditedPostAttribute('content') || '',
-                e: editorSel.getEditedPostAttribute('excerpt') || ''
-            };
-            
-            const str = JSON.stringify(content);
-            
-            // DJB2 ハッシュ関数（軽量な32bitハッシュ）
-            let hash = 5381;
-            for (let i = 0; i < str.length; i++) {
-                hash = ((hash << 5) + hash) + str.charCodeAt(i);
-                hash = hash & 0xffffffff; // 32bitに保つ
-            }
-            
-            return hash;
-        } catch (error) {
-            console.warn('[worklog] Error computing edit hash:', error);
-            return Math.random(); // エラー時はランダムで続行
-        }
-    }
-    
-    /**
-     * subscribe単一登録管理
-     */
-    function ensureSubscribed() {
-        if (subscriptionHandle) {
-            debugLog('subscription already exists, skipping');
-            return;
-        }
-        
-        debugLog('setting up save monitoring subscription');
-        subscriptionHandle = subscribe(saveStateHandler);
-    }
-    
-    /**
-     * 保存状態監視ハンドラー（再入防止付き）
-     */
-    function saveStateHandler() {
-        if (handlerRunning) {
-            if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'F1', {reason: 'handler already running'});
-            return;
-        }
-        
-        handlerRunning = true;
-        let triggerDetected = false;
-        
-        try {
-            const coreSel = wp.data.select('core');
-            const editorSel = wp.data.select('core/editor');
-            
-            if (!editorSel) {
-                if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'E1', {reason: 'no editor selector'});
-                return;
-            }
-            
-            const postType = editorSel.getCurrentPostType();
-            const hasEdits = 
-                coreSel && typeof coreSel.hasEditsForEntityRecord === 'function'
-                    ? coreSel.hasEditsForEntityRecord('postType', postType, currentPostId)
-                    : (editorSel.isEditedPostDirty && editorSel.isEditedPostDirty());
-            
-            const currentSaveState = {
+            const currentState = {
                 isSaving: editorSel.isSavingPost(),
                 isAutosaving: editorSel.isAutosavingPost(),
                 savedOk: editorSel.didPostSaveRequestSucceed(),
-                hasEdits: hasEdits
+                isDirty: editorSel.isEditedPostDirty()
             };
             
-            // オートセーブ中の場合はスキップ
-            if (currentSaveState.isAutosaving) {
-                if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'A1', {reason: 'autosaving', currentSaveState});
-                lastSaveState = currentSaveState;
-                return;
-            }
-            
-            // 保存開始検知（false→true遍移）で新サイクル開始
-            if (lastSaveState && !lastSaveState.isSaving && currentSaveState.isSaving) {
+            // 保存開始検知（false→true遷移）で新サイクル開始
+            if (prevState && !prevState.isSaving && currentState.isSaving) {
                 saveCycleId++;
                 shownInThisCycle = false;
-                if (DEBUG_WORKLOG) {
-                    console.log('[worklog][cycle]', 'save start', {saveCycleId, shownInThisCycle});
-                }
+                wasDirtyBeforeSave = prevState.isDirty; // 保存開始時のDirty状態を記録
+                
+                debugLog('cycle', 'save start', {
+                    saveCycleId,
+                    wasDirtyBeforeSave,
+                    isAutosaving: currentState.isAutosaving
+                });
             }
             
-            // 保存完了エッジ検知（ワンショット・デバウンス付き）
-            if (lastSaveState && 
-                !lastSaveState.isAutosaving && 
-                !currentSaveState.isAutosaving) {
+            // 保存完了検知（エッジ検出）
+            if (prevState && 
+                prevState.isSaving && 
+                !currentState.isSaving && 
+                !currentState.isAutosaving && 
+                currentState.savedOk) {
                 
-                const now = Date.now();
-                const timeSinceLastHandle = now - lastHandledAt;
+                debugLog('edge', 'save completed successfully', {
+                    saveCycleId,
+                    wasDirtyBeforeSave,
+                    shownInThisCycle
+                });
                 
-                // 3秒以内の再発火は無視
-                if (timeSinceLastHandle < 3000) {
-                    // デバウンス中はS1も出さない（静寂を保つ）
-                    lastSaveState = currentSaveState;
-                    return;
-                }
-                
-                // 条件A: prev.isSaving → curr.isSaving の変化 + curr.savedOk
-                const conditionA = lastSaveState.isSaving && 
-                                   !currentSaveState.isSaving && 
-                                   currentSaveState.savedOk;
-                
-                // 条件B: prev.savedOk → curr.savedOk の変化（高速環境対応）
-                const conditionB = !lastSaveState.savedOk && 
-                                   currentSaveState.savedOk;
-                
-                if (conditionA || conditionB) {
-                    triggerDetected = true;
-                    lastHandledAt = now;
-                    
-                    const currentEditHash = computeEditHash();
-                    const cooldownRemain = Math.max(0, Math.ceil((suppressUntil - now) / 1000));
-                    
-                    // 多段階ガード：クールダウンチェック
-                    if (now < suppressUntil) {
-                        if (DEBUG_WORKLOG) {
-                            console.log('[worklog][skip]', 'S1 cooldown', {
-                                reason: 'within cooldown period',
-                                cooldownRemain,
-                                saveCycleId
-                            });
-                        }
-                        return;
-                    }
-                    
-                    // 多段階ガード：同一編集ハッシュチェック
-                    if (lastEditHash !== null && lastEditHash === currentEditHash) {
-                        if (DEBUG_WORKLOG) {
-                            console.log('[worklog][skip]', 'S1 same-edit-hash', {
-                                reason: 'same content hash as previous',
-                                hash: currentEditHash,
-                                saveCycleId
-                            });
-                        }
-                        return;
-                    }
-                    
-                    // 多段階ガード：同一サイクル内の重複表示防止
-                    if (shownInThisCycle) {
-                        if (DEBUG_WORKLOG) {
-                            console.log('[worklog][skip]', 'S1 same-cycle', {
-                                reason: 'already shown in this save cycle',
-                                saveCycleId,
-                                shownInThisCycle
-                            });
-                        }
-                        return;
-                    }
-                    
-                    if (DEBUG_WORKLOG) {
-                        console.log('[worklog][trigger]', 'edge', {
-                            prev: lastSaveState,
-                            curr: currentSaveState,
-                            conditionA,
-                            conditionB,
-                            saveCycleId,
-                            shownInThisCycle,
-                            hash: currentEditHash,
-                            cooldownRemain,
-                            epoch: now
-                        });
-                    }
-                    
-                    // 次tickで通知判定を呼ぶ（ワンショット）
-                    setTimeout(() => {
-                        checkAndShowWorklogPrompt();
-                    }, 0);
-                }
+                // 通知表示判定
+                checkAndShowNotice();
             }
             
-            // トリガ未成立時のS1ログ（1回だけ、連発しない）
-            if (!triggerDetected && lastSaveState && DEBUG_WORKLOG) {
-                // 前回の状態更新から十分時間が経っていて、まだ保存完了していない場合のみ
-                const timeSinceLastState = Date.now() - (lastSaveState._timestamp || 0);
-                if (timeSinceLastState > 1000) { // 1秒経過後にS1を1回だけ
-                    console.log('[worklog][skip]', 'S1', {
-                        reason: 'not save completion edge',
-                        lastSaveState,
-                        currentSaveState
-                    });
-                }
-            }
-            
-            // 状態更新にタイムスタンプを追加
-            currentSaveState._timestamp = Date.now();
-            lastSaveState = currentSaveState;
+            prevState = currentState;
             
         } catch (error) {
-            console.error('[worklog] Error in save state handler:', error);
-        } finally {
-            handlerRunning = false;
+            console.error('[worklog] Error in save state monitor:', error);
         }
     }
     
     /**
-     * 作業ログ促しの表示判定とSnackbar表示
+     * 通知表示判定とフィルタリング
      */
-    async function checkAndShowWorklogPrompt() {
-        if (!currentPostId) {
-            if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'P0', {reason: 'no currentPostId'});
+    function checkAndShowNotice() {
+        const now = Date.now();
+        
+        // フェイルセーフ: オートセーブは除外
+        if (prevState && prevState.isAutosaving) {
+            debugLog('skip', 'autosave cycle', {reason: 'autosave'});
+            return;
+        }
+        
+        // フェイルセーフ: 変更なし保存は除外
+        if (!wasDirtyBeforeSave) {
+            debugLog('skip', 'no changes before save', {reason: 'not dirty'});
+            return;
+        }
+        
+        // フェイルセーフ: 既に同サイクルで表示済み
+        if (shownInThisCycle) {
+            debugLog('skip', 'already shown in this cycle', {
+                reason: 'same cycle',
+                saveCycleId
+            });
+            return;
+        }
+        
+        // フェイルセーフ: デバウンス（3秒以内の連続は無視）
+        const timeSinceLastNotice = now - lastNoticeAt;
+        if (timeSinceLastNotice < 3000) {
+            debugLog('skip', 'debounce period', {
+                reason: 'debounce',
+                timeSinceLastNotice: Math.round(timeSinceLastNotice / 1000)
+            });
             return;
         }
         
         // 強制表示フック（開発用）
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('worklog_test') === '1') {
-            if (DEBUG_WORKLOG) console.log('[worklog][force]', 'test mode activated');
+            debugLog('force', 'test mode activated');
             // クエリパラメータを削除（多重表示防止）
             urlParams.delete('worklog_test');
             const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
             history.replaceState({}, '', newUrl);
             
-            showWorklogPrompt({test_mode: true});
+            showWorklogNotice();
             return;
         }
         
-        let worklogStatus = null;
+        // worklog_status の確認（非ブロッキング）
+        checkWorklogStatusAndShow();
+    }
+    
+    /**
+     * worklog_status確認と通知表示
+     */
+    async function checkWorklogStatusAndShow() {
+        if (!currentPostId) {
+            debugLog('skip', 'no currentPostId');
+            return;
+        }
+        
+        let shouldShow = true; // デフォルトで表示（非ブロッキング）
         
         try {
-            // 現在の作業ログ状態を取得
+            // 現在の作業ログ状態を取得（空でも続行）
             const response = await wp.apiFetch({
                 path: `/wp/v2/posts/${currentPostId}?_fields=worklog_status`,
                 method: 'GET'
             });
             
-            worklogStatus = response.worklog_status;
+            const worklogStatus = response.worklog_status;
             
             if (worklogStatus) {
-                if (DEBUG_WORKLOG) console.log('[worklog][ok]', 'S0 status', {worklogStatus});
+                debugLog('api', 'worklog_status received', {worklogStatus});
+                shouldShow = worklogStatus.should_prompt !== false;
             } else {
-                // S0を非ブロッキング化：空レス時はフォールバックして継続
-                if (DEBUG_WORKLOG) console.log('[worklog][warn]', 'S0 fallback: missing worklog_status (proceed)', {response});
-                worklogStatus = {status: 'unknown', should_prompt: true}; // デフォルトで通知へ進む
+                debugLog('warn', 'worklog_status empty, proceeding with default', {response});
+                // 空レス時もデフォルトで表示
             }
             
         } catch (error) {
-            // ネットワークエラー時も継続（非ブロッキング）
-            if (DEBUG_WORKLOG) console.log('[worklog][warn]', 'S0 fallback: API error (proceed)', {error});
-            console.error('[worklog] 作業ログ状態の取得に失敗:', error);
-            worklogStatus = {status: 'error', should_prompt: true}; // エラー時もデフォルトで通知へ
+            debugLog('warn', 'API error, proceeding with default', {error});
+            console.warn('[worklog] worklog_status取得エラー（続行）:', error);
+            // APIエラー時もデフォルトで表示
         }
         
-        // 通知表示判定（S0は情報補助、ゲートではない）
-        if (worklogStatus && worklogStatus.should_prompt) {
-            if (DEBUG_WORKLOG) {
-                console.log('[worklog][proceed]', 'conditions met, showing worklog prompt', {
-                    worklogStatus,
-                    saveCycleId,
-                    shownInThisCycle
-                });
-            }
-            showWorklogPrompt(worklogStatus);
+        if (shouldShow) {
+            showWorklogNotice();
         } else {
-            // should_promptがfalseの場合のみスキップ（これみ、本来のフィルタリング）
-            if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'C0', {reason: 'should_prompt is false', worklogStatus});
+            debugLog('skip', 'should_prompt is false', {reason: 'server blocked'});
         }
     }
     
     /**
-     * 作業ログ促しSnackbarを表示（多重発火防止）
+     * 作業ログ固定通知を表示
      */
-    function showWorklogPrompt(worklogStatus) {
-        if (showingNotice) {
-            if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'F1', {reason: 'notice already showing'});
-            return;
-        }
-        
-        showingNotice = true;
-        if (DEBUG_WORKLOG) console.log('[worklog][show]', 'preparing to show notice', {worklogStatus});
-        
-        // 次tickで実行（同期実行防止）
-        setTimeout(() => {
-            try {
-                // 既存の通知を削除
-                removeNotice(worklogNoticeId);
-                
-                // カスタマイズ可能なメッセージ（テストモード対応）
-                const message = worklogStatus.test_mode 
-                    ? 'TEST: 作業ログを残しますか？（強制表示テスト）'
-                    : (ofwnWorklogEditor.strings.prompt_message || '今回の変更の作業ログを残しますか？');
-                
-                // Snackbar（通知）を表示
-                createNotice('info', message, {
-                    id: worklogNoticeId,
-                    isDismissible: true,
-                    actions: [
-                        {
-                            label: ofwnWorklogEditor.strings.write_now || '今すぐ書く',
-                            onClick: () => {
-                                removeNotice(worklogNoticeId);
-                                showingNotice = false;
-                                scrollToWorklogInput();
-                            }
-                        },
-                        {
-                            label: ofwnWorklogEditor.strings.skip_this_time || '今回はスルー',
-                            onClick: () => {
-                                removeNotice(worklogNoticeId);
-                                showingNotice = false;
-                                skipWorklog();
-                            }
+    function showWorklogNotice() {
+        try {
+            const { createNotice, removeNotice } = dispatch('core/notices');
+            
+            // 既存の通知を削除
+            removeNotice(worklogNoticeId);
+            
+            // 固定通知（上部）を作成
+            createNotice('default', '作業メモを残しますか？', {
+                id: worklogNoticeId,
+                isDismissible: true,
+                actions: [
+                    {
+                        label: '今すぐ書く',
+                        onClick: () => {
+                            debugLog('click', 'write now button clicked');
+                            removeNotice(worklogNoticeId);
+                            openWorklogSidebar();
                         }
-                    ]
-                });
-                
-                if (DEBUG_WORKLOG) {
-                    console.log('[worklog][show]', 'notice created successfully', {
-                        id: worklogNoticeId,
-                        saveCycleId,
-                        shownInThisCycle: true
-                    });
-                }
-                
-                // サイクル内表示フラグを立てる
-                shownInThisCycle = true;
-                
-                // クールダウンとハッシュ更新
-                suppressUntil = Date.now() + 60 * 1000; // 60秒間のクールダウン
-                lastEditHash = computeEditHash();
-                
-                // 自動消滅タイマー（設定可能）
-                const autoHideDelay = ofwnWorklogEditor.autoHideDelay || 10000; // 10秒
-                setTimeout(() => {
-                    removeNotice(worklogNoticeId);
-                    showingNotice = false;
-                    if (DEBUG_WORKLOG) console.log('[worklog][hide]', 'notice auto-hidden');
-                }, autoHideDelay);
-                
-            } catch (error) {
-                console.error('[worklog] Error showing notice:', error);
-            } finally {
-                // エラーが起きてもフラグを確実に戻す
-                if (showingNotice) {
-                    showingNotice = false;
-                }
-            }
-        }, 0);
+                    },
+                    {
+                        label: '今回はスルー',
+                        onClick: () => {
+                            debugLog('click', 'skip button clicked');
+                            removeNotice(worklogNoticeId);
+                            // スキップ処理（必要に応じてサーバー通知）
+                        }
+                    }
+                ]
+            });
+            
+            // 表示完了の記録
+            shownInThisCycle = true;
+            lastNoticeAt = Date.now();
+            
+            debugLog('show', 'fixed notice created', {
+                id: worklogNoticeId,
+                saveCycleId,
+                timestamp: lastNoticeAt
+            });
+            
+        } catch (error) {
+            console.error('[worklog] Error creating notice:', error);
+        }
     }
     
     /**
-     * 作業メモ入力欄へスクロール
+     * 作業ログサイドバーを開く
      */
-    function scrollToWorklogInput() {
-        // 作業メモ入力欄を探す
-        const worklogSelectors = [
-            '#ofwn_parent .ofwn-quick-content', // 親投稿の作業メモ入力欄
-            '#ofwn_fields', // 作業メモ属性メタボックス
-            '.ofwn-worklog-input', // カスタムクラス
-            'textarea[name="ofwn_quick_content"]' // 作業メモテキストエリア
+    function openWorklogSidebar() {
+        try {
+            const { openGeneralSidebar } = dispatch('core/edit-post');
+            
+            // サイドバーを開く（プラグイン固有のサイドバーID）
+            openGeneralSidebar('ofwn/worklog-sidebar');
+            
+            debugLog('sidebar', 'worklog sidebar opened');
+            
+        } catch (error) {
+            console.warn('[worklog] サイドバーオープンに失敗、代替処理へ:', error);
+            
+            // 代替処理：メタボックスへスクロール
+            scrollToWorklogMetabox();
+        }
+    }
+    
+    /**
+     * 作業ログメタボックスへスクロール（代替処理）
+     */
+    function scrollToWorklogMetabox() {
+        const selectors = [
+            '#ofwn_parent .ofwn-quick-content',
+            '#ofwn_fields',
+            '.ofwn-worklog-input',
+            'textarea[name="ofwn_quick_content"]'
         ];
         
         let targetElement = null;
         
-        for (const selector of worklogSelectors) {
+        for (const selector of selectors) {
             targetElement = document.querySelector(selector);
             if (targetElement) break;
         }
         
         if (targetElement) {
-            // スクロールしてフォーカス
             targetElement.scrollIntoView({ 
                 behavior: 'smooth', 
                 block: 'center' 
@@ -425,186 +293,101 @@
                     inputElement.focus();
                 }, 300);
             }
+            
+            debugLog('scroll', 'scrolled to worklog metabox');
         } else {
-            // 作業メモ入力欄が見つからない場合の代替処理
-            showFallbackWorklogDialog();
-        }
-    }
-    
-    /**
-     * 作業ログをスキップ
-     */
-    async function skipWorklog() {
-        if (!currentPostId) return;
-        
-        try {
-            const formData = new FormData();
-            formData.append('action', 'ofwn_skip_worklog');
-            formData.append('nonce', ofwnWorklogEditor.nonce);
-            formData.append('post_id', currentPostId);
-            
-            const response = await fetch(ofwnWorklogEditor.ajax_url, {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                // スキップ成功の通知（控えめに）
-                createNotice('info', result.data.message || 'スキップしました', {
-                    isDismissible: true,
-                    type: 'snackbar'
-                });
-            } else {
-                console.error('[worklog] スキップに失敗:', result.data.message);
-            }
-        } catch (error) {
-            console.error('[worklog] スキップ処理でエラー:', error);
-        }
-    }
-    
-    /**
-     * 代替の作業ログ入力ダイアログを表示
-     */
-    function showFallbackWorklogDialog() {
-        const logText = prompt(
-            ofwnWorklogEditor.strings.fallback_prompt || 
-            '作業ログを入力してください（空の場合はスキップされます）:'
-        );
-        
-        if (logText && logText.trim()) {
-            saveWorklogDirect(logText.trim());
-        } else {
-            // 空の場合はスキップ
-            skipWorklog();
-        }
-    }
-    
-    /**
-     * 作業ログを直接保存
-     */
-    async function saveWorklogDirect(logText) {
-        if (!currentPostId || !logText) return;
-        
-        try {
-            const worklogStatus = await getCurrentWorklogStatus();
-            
-            const formData = new FormData();
-            formData.append('action', 'ofwn_save_worklog');
-            formData.append('nonce', ofwnWorklogEditor.nonce);
-            formData.append('post_id', currentPostId);
-            formData.append('log_text', logText);
-            formData.append('revision_id', worklogStatus.current_revision);
-            
-            const response = await fetch(ofwnWorklogEditor.ajax_url, {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                createNotice('success', result.data.message || '作業ログを保存しました', {
-                    isDismissible: true,
-                    type: 'snackbar'
-                });
-            } else {
-                createNotice('error', result.data.message || '作業ログの保存に失敗しました', {
-                    isDismissible: true
-                });
-            }
-        } catch (error) {
-            console.error('[worklog] 作業ログ保存でエラー:', error);
-            createNotice('error', '作業ログの保存中にエラーが発生しました', {
-                isDismissible: true
-            });
-        }
-    }
-    
-    /**
-     * 現在の作業ログ状態を取得
-     */
-    async function getCurrentWorklogStatus() {
-        const formData = new FormData();
-        formData.append('action', 'ofwn_get_worklog_status');
-        formData.append('nonce', ofwnWorklogEditor.nonce);
-        formData.append('post_id', currentPostId);
-        
-        const response = await fetch(ofwnWorklogEditor.ajax_url, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            return result.data;
-        } else {
-            throw new Error(result.data.message || '状態取得に失敗');
+            debugLog('warn', 'worklog input not found');
         }
     }
     
     /**
      * 初期化処理
      */
-    function initWorklogPrompt() {
+    function initWorklogNotice() {
         if (isInitialized) {
-            debugLog('already initialized, skipping');
+            debugLog('init', 'already initialized, skipping');
             return;
         }
         
-        debugLog('initializing worklog prompt');
+        debugLog('init', 'initializing worklog notice system');
         
         // エディタが読み込まれるまで待機
-        const unsubscribe = subscribe(() => {
-            const postId = select('core/editor').getCurrentPostId();
-            const postType = select('core/editor').getCurrentPostType();
-            
-            if (postId && postType) {
-                currentPostId = postId;
-                isInitialized = true;
-                unsubscribe();
+        const initSub = subscribe(() => {
+            try {
+                const editorSel = select('core/editor');
+                if (!editorSel) return;
                 
-                debugLog('initialized for post:', postId, 'type:', postType);
+                const postId = editorSel.getCurrentPostId();
+                const postType = editorSel.getCurrentPostType();
                 
-                // 保存状態を監視
-                ensureSubscribed();
+                if (postId && postType) {
+                    currentPostId = postId;
+                    isInitialized = true;
+                    
+                    // 初期化完了後、購読を解除して本監視を開始
+                    if (initSub) {
+                        initSub();
+                    }
+                    
+                    debugLog('init', 'initialized for post', {
+                        postId,
+                        postType
+                    });
+                    
+                    // メイン監視開始
+                    ensureSingleSubscribe();
+                }
+            } catch (error) {
+                console.error('[worklog] Error in init subscribe:', error);
             }
         });
     }
     
-    // DOM読み込み完了時に初期化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initWorklogPrompt);
-    } else {
-        initWorklogPrompt();
-    }
-    
-    // エディタが遅れて読み込まれる場合に備えて
-    setTimeout(initWorklogPrompt, 1000);
-    
-    // 現在状態を覗く API（読み取り専用）
+    // 現在状態を覗くAPI（デバッグ用）
     window.worklogDebugState = () => {
         const editorSel = select('core/editor');
         return {
+            // エディタ状態
             saving: editorSel ? editorSel.isSavingPost() : null,
             autosaving: editorSel ? editorSel.isAutosavingPost() : null,
             savedOk: editorSel ? editorSel.didPostSaveRequestSucceed() : null,
+            isDirty: editorSel ? editorSel.isEditedPostDirty() : null,
             postId: editorSel ? editorSel.getCurrentPostId() : null,
             postType: editorSel ? editorSel.getEditedPostAttribute('type') : null,
-            isShowingNotice: showingNotice,
-            isHandlerRunning: handlerRunning,
-            isInitialized: isInitialized,
+            
+            // 内部状態
+            isInitialized,
             hasSubscription: !!subscriptionHandle,
-            lastSaveState: lastSaveState,
-            currentPostId: currentPostId,
-            saveCycleId: saveCycleId,
-            shownInThisCycle: shownInThisCycle,
-            lastEditHash: lastEditHash,
-            suppressUntil: suppressUntil,
-            cooldownRemain: Math.max(0, Math.ceil((suppressUntil - Date.now()) / 1000))
+            currentPostId,
+            
+            // サイクル管理
+            saveCycleId,
+            shownInThisCycle,
+            wasDirtyBeforeSave,
+            lastNoticeAt,
+            debounceRemain: Math.max(0, Math.ceil((lastNoticeAt + 3000 - Date.now()) / 1000)),
+            
+            // 前回状態
+            prevState
         };
     };
+    
+    // DOM読み込み完了時に初期化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initWorklogNotice);
+    } else {
+        initWorklogNotice();
+    }
+    
+    // エディタが遅れて読み込まれる場合の保険
+    setTimeout(initWorklogNotice, 1000);
+    
+    // クリーンアップ
+    window.addEventListener('beforeunload', () => {
+        if (subscriptionHandle) {
+            debugLog('cleanup', 'unsubscribing on beforeunload');
+            subscriptionHandle();
+        }
+    });
     
 })();
