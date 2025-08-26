@@ -713,7 +713,7 @@ class OF_Work_Notes {
         wp_enqueue_script(
             'ofwn-worklog-editor',
             OFWN_URL . 'assets/worklog-editor.js',
-            ['wp-data', 'wp-element', 'wp-i18n', 'wp-api-fetch'],
+            ['wp-data', 'wp-core-data', 'wp-element', 'wp-i18n', 'wp-api-fetch'],
             filemtime(OFWN_DIR . 'assets/worklog-editor.js'),
             true
         );

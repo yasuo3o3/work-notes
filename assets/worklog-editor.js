@@ -43,10 +43,18 @@
      */
     function startSaveMonitoring() {
         subscribe(() => {
+            const coreSel = wp.data.select('core');
+            const editorSel = wp.data.select('core/editor');
+            const postType = editorSel.getCurrentPostType();
+            const hasEdits = 
+                coreSel && typeof coreSel.hasEditsForEntityRecord === 'function'
+                    ? coreSel.hasEditsForEntityRecord('postType', postType, currentPostId)
+                    : (editorSel.isEditedPostDirty && editorSel.isEditedPostDirty());
+            
             const currentSaveState = {
-                isSaving: select('core/editor').isSavingPost(),
-                isAutosaving: select('core/editor').isAutosavingPost(),
-                hasEdits: select('core/editor').hasEditsForEntityRecord('postType', select('core/editor').getCurrentPostType(), currentPostId)
+                isSaving: editorSel.isSavingPost(),
+                isAutosaving: editorSel.isAutosavingPost(),
+                hasEdits: hasEdits
             };
             
             // 保存完了を検知
