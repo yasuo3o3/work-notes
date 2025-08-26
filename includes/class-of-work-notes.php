@@ -9,11 +9,14 @@ class OF_Work_Notes {
 
     public function __construct() {
         add_action('init', [$this, 'register_cpt']);
+        add_action('init', [$this, 'register_meta_fields']);
         add_action('add_meta_boxes', [$this, 'add_meta_boxes']);
         add_action('save_post', [$this, 'save_note_meta']);
         add_action('save_post', [$this, 'capture_quick_note_from_parent'], 20, 2);
         add_filter('manage_edit-' . self::CPT . '_columns', [$this, 'cols']);
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'col_content'], 10, 2);
+        add_filter('manage_edit-' . self::CPT . '_sortable_columns', [$this, 'sortable_cols']);
+        add_action('pre_get_posts', [$this, 'handle_sortable_columns']);
         add_action('admin_bar_menu', [$this, 'admin_bar_quick_add'], 80);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
         add_action('current_screen', [$this, 'maybe_prefill_target_meta']);
@@ -262,10 +265,46 @@ class OF_Work_Notes {
     }
 
     public function save_note_meta($post_id) {
-        if (!isset($_POST[self::NONCE]) || !wp_verify_nonce($_POST[self::NONCE], self::NONCE)) return;
-        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
-        if (!current_user_can('edit_post', $post_id)) return;
-        if (get_post_type($post_id) !== self::CPT) return;
+        // デバッグログ開始
+        $debug_log = defined('WP_DEBUG_LOG') && WP_DEBUG_LOG;
+        if ($debug_log) {
+            error_log('[OFWN] save_note_meta called for post_id: ' . $post_id);
+        }
+        
+        // ノンス検証（最優先）
+        if (!isset($_POST[self::NONCE])) {
+            if ($debug_log) error_log('[OFWN] Nonce field missing');
+            return;
+        }
+        
+        if (!wp_verify_nonce($_POST[self::NONCE], self::NONCE)) {
+            if ($debug_log) error_log('[OFWN] Nonce verification failed');
+            return;
+        }
+        
+        // 自動保存スキップ
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            if ($debug_log) error_log('[OFWN] Skipping autosave');
+            return;
+        }
+        
+        // 権限チェック
+        if (!current_user_can('edit_post', $post_id)) {
+            if ($debug_log) error_log('[OFWN] User cannot edit post');
+            return;
+        }
+        
+        // 投稿タイプチェック
+        if (get_post_type($post_id) !== self::CPT) {
+            if ($debug_log) error_log('[OFWN] Wrong post type: ' . get_post_type($post_id));
+            return;
+        }
+        
+        // Quick Edit 対策：メタフィールドが存在しない場合はスキップ
+        if (!isset($_POST['ofwn_requester_select']) && !isset($_POST['ofwn_requester'])) {
+            if ($debug_log) error_log('[OFWN] Meta fields not present, possibly Quick Edit - skipping');
+            return;
+        }
 
         $requester = $this->resolve_select_or_custom('ofwn_requester');
         $worker    = $this->resolve_select_or_custom('ofwn_worker');
@@ -279,12 +318,34 @@ class OF_Work_Notes {
             '_ofwn_status'       => 'ofwn_status',
             '_ofwn_work_date'    => 'ofwn_work_date',
         ];
+        // 保存前のログ
+        if ($debug_log) {
+            error_log('[OFWN] Saving meta: requester=' . $requester . ', worker=' . $worker);
+        }
+        
         foreach ($map as $meta => $fieldOrValue) {
+            $old_value = get_post_meta($post_id, $meta, true);
+            
             if (is_string($fieldOrValue) && isset($_POST[$fieldOrValue])) {
-                update_post_meta($post_id, $meta, sanitize_text_field($_POST[$fieldOrValue]));
+                $new_value = sanitize_text_field($_POST[$fieldOrValue]);
+                update_post_meta($post_id, $meta, $new_value);
+                if ($debug_log && $old_value !== $new_value) {
+                    error_log('[OFWN] Updated ' . $meta . ': "' . $old_value . '" -> "' . $new_value . '"');
+                }
             } elseif (!is_string($fieldOrValue) && $fieldOrValue !== null) {
-                update_post_meta($post_id, $meta, sanitize_text_field($fieldOrValue));
+                $new_value = sanitize_text_field($fieldOrValue);
+                update_post_meta($post_id, $meta, $new_value);
+                if ($debug_log && $old_value !== $new_value) {
+                    error_log('[OFWN] Updated ' . $meta . ': "' . $old_value . '" -> "' . $new_value . '"');
+                }
             }
+        }
+        
+        // 保存後の検証
+        if ($debug_log) {
+            $saved_req = get_post_meta($post_id, '_ofwn_requester', true);
+            $saved_worker = get_post_meta($post_id, '_ofwn_worker', true);
+            error_log('[OFWN] Post-save verification: requester=' . $saved_req . ', worker=' . $saved_worker);
         }
 
         if (empty($_POST['post_title'])) {
@@ -309,6 +370,8 @@ class OF_Work_Notes {
         $new = [];
         $new['cb'] = $cols['cb'] ?? '';
         $new['title'] = __('タイトル', 'work-notes');
+        $new['ofwn_requester'] = '依頼元';
+        $new['ofwn_assignee'] = '担当者';
         $new['ofwn_target'] = '対象';
         $new['ofwn_status'] = 'ステータス';
         $new['author'] = '作成者';
@@ -317,6 +380,14 @@ class OF_Work_Notes {
     }
 
     public function col_content($col, $post_id) {
+        if ($col === 'ofwn_requester') {
+            $requester = $this->get_meta($post_id, '_ofwn_requester');
+            echo esc_html($requester ?: '—');
+        }
+        if ($col === 'ofwn_assignee') {
+            $worker = $this->get_meta($post_id, '_ofwn_worker');
+            echo esc_html($worker ?: '—');
+        }
         if ($col === 'ofwn_target') {
             $type  = $this->get_meta($post_id, '_ofwn_target_type');
             $id    = $this->get_meta($post_id, '_ofwn_target_id');
@@ -333,6 +404,78 @@ class OF_Work_Notes {
             $s = $this->get_meta($post_id, '_ofwn_status','依頼');
             $cls = $s==='完了' ? 'done' : '';
             echo '<span class="ofwn-badge ' . esc_attr($cls) . '">' . esc_html($s) . '</span>';
+        }
+    }
+
+    public function sortable_cols($cols) {
+        $cols['ofwn_requester'] = 'ofwn_requester';
+        $cols['ofwn_assignee'] = 'ofwn_assignee';
+        return $cols;
+    }
+
+    public function handle_sortable_columns($query) {
+        if (!is_admin() || !$query->is_main_query()) return;
+        
+        $screen = get_current_screen();
+        if (!$screen || $screen->post_type !== self::CPT || $screen->base !== 'edit') return;
+
+        $orderby = $query->get('orderby');
+        if ($orderby === 'ofwn_requester') {
+            $query->set('meta_key', '_ofwn_requester');
+            $query->set('orderby', 'meta_value');
+        } elseif ($orderby === 'ofwn_assignee') {
+            $query->set('meta_key', '_ofwn_worker');
+            $query->set('orderby', 'meta_value');
+        }
+    }
+
+    /**
+     * ブロックエディタ対応のためのメタフィールド登録
+     * 本番での保存バグを修正するための REST API 対応
+     */
+    public function register_meta_fields() {
+        // 依頼元フィールド（仕様書での ofwn_requester に相当）
+        register_post_meta(self::CPT, '_ofwn_requester', [
+            'show_in_rest' => true,
+            'single' => true,
+            'type' => 'string',
+            'auth_callback' => function($allowed, $meta_key, $post_id) {
+                return current_user_can('edit_post', $post_id);
+            },
+            'sanitize_callback' => 'sanitize_text_field'
+        ]);
+        
+        // 担当者フィールド（仕様書での ofwn_assignee に相当）
+        register_post_meta(self::CPT, '_ofwn_worker', [
+            'show_in_rest' => true,
+            'single' => true,
+            'type' => 'string', 
+            'auth_callback' => function($allowed, $meta_key, $post_id) {
+                return current_user_can('edit_post', $post_id);
+            },
+            'sanitize_callback' => 'sanitize_text_field'
+        ]);
+        
+        // その他のメタフィールドもブロックエディタ対応
+        $other_metas = [
+            '_ofwn_target_type', '_ofwn_target_id', '_ofwn_target_label', 
+            '_ofwn_status', '_ofwn_work_date'
+        ];
+        foreach ($other_metas as $meta_key) {
+            register_post_meta(self::CPT, $meta_key, [
+                'show_in_rest' => true,
+                'single' => true,
+                'type' => 'string',
+                'auth_callback' => function($allowed, $meta_key, $post_id) {
+                    return current_user_can('edit_post', $post_id);
+                },
+                'sanitize_callback' => 'sanitize_text_field'
+            ]);
+        }
+        
+        // デバッグログ用（WP_DEBUG_LOG 有効時のみ）
+        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            error_log('[OFWN] Meta fields registered for block editor compatibility');
         }
     }
 
