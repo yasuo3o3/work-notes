@@ -5,6 +5,11 @@ if (!defined('WP_UNINSTALL_PLUGIN')) exit;
 delete_option('ofwn_requesters');
 delete_option('ofwn_workers');
 
+// 作業ログ促し機能関連オプションの削除
+delete_option('of_worklog_target_user_ids');
+delete_option('of_worklog_target_post_types'); 
+delete_option('of_worklog_min_role');
+
 // カスタム投稿タイプとメタデータのバッチ削除
 global $wpdb;
 
@@ -43,4 +48,10 @@ do {
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
     '_ofwn_%'
+));
+
+// 作業ログメタデータも削除
+$wpdb->query($wpdb->prepare(
+    "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
+    'work_log_%'
 ));

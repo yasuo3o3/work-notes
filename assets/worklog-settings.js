@@ -86,7 +86,7 @@
                 }
             },
             error: function() {
-                showNoResults('検索中にエラーが発生しました。');
+                showNoResults(ofwnWorklogSettings.strings.search_error || '検索中にエラーが発生しました。');
             }
         });
     }
@@ -120,7 +120,7 @@
         if (html) {
             $results.html(html).show();
         } else {
-            showNoResults('選択可能な新しいユーザーがありません。');
+            showNoResults(ofwnWorklogSettings.strings.no_available_users || '選択可能な新しいユーザーがありません。');
         }
     }
     
@@ -167,7 +167,7 @@
         
         // 既に存在するかチェック
         if ($selectedList.find('[data-user-id="' + user.id + '"]').length > 0) {
-            alert('このユーザーは既に追加されています。');
+            alert(ofwnWorklogSettings.strings.already_added || 'このユーザーは既に追加されています。');
             return;
         }
         

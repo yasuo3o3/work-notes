@@ -1,14 +1,14 @@
 === Work Notes ===
 Contributors: netservice
-Tags: notes, workflow, task-management, admin
-Requires at least: 6.3
+Tags: notes, workflow, task-management, admin, snackbar, gutenberg
+Requires at least: 6.0
 Tested up to: 6.4
 Stable tag: 1.00
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-クライアント指示や更新作業のメモをWP内で記録・管理するプラグイン
+クライアント指示や更新作業のメモをWP内で記録・管理するプラグイン。保存後の作業ログ促し機能付き。
 
 == Description ==
 
@@ -21,8 +21,11 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.html
 * 依頼元・担当者のマスター管理
 * ステータス管理（依頼・対応中・完了）
 * 実施日による管理
-* 一覧表示・絞り込み検索
+* 一覧表示・絞り込み検索（依頼元・担当者列でソート可能）
 * 管理バーからクイック追加
+* **NEW** 保存後の作業ログ促し（Snackbar通知）
+* **NEW** 複数ユーザー対象設定
+* **NEW** リビジョンベースでの重複防止
 
 = 利用想定 =
 
@@ -58,6 +61,18 @@ WordPressのカスタム投稿タイプとしてwp_postsテーブルに、関連
 3. 投稿編集画面での作業メモ表示 - 関連する作業メモを確認・追加
 
 == Changelog ==
+
+= 1.00 =
+* 作業ログ促し（Snackbar）機能の実装
+* 複数ユーザー対象設定機能
+* リビジョンベースでの重複防止
+* 管理画面一覧に依頼元・担当者列を追加
+* 列のソート機能実装
+* register_post_meta による REST API 対応
+* uninstall.php でのデータ完全削除
+* XSS対策強化とローカライズ改善
+* アセット読み込みの最適化
+* WordPress Coding Standards 完全準拠
 
 = 0.05 =
 * i18n対応の強化

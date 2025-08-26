@@ -677,23 +677,32 @@ class OF_Work_Notes {
      * 作業ログエディタ用アセットを読み込み
      */
     public function enqueue_worklog_editor_assets($hook) {
-        // 投稿編集画面のみで読み込み
+        // 早期リターン：投稿編集画面のみ
         if (!in_array($hook, ['post.php', 'post-new.php'])) {
             return;
         }
         
+        // スクリーンチェックを最初に実行
         $screen = get_current_screen();
-        if (!$screen) return;
-        
-        // 対象投稿タイプかどうかチェック
-        if (!class_exists('OFWN_Worklog_Settings') || 
-            !OFWN_Worklog_Settings::is_target_post_type($screen->post_type)) {
+        if (!$screen || !in_array($screen->post_type, ['post', 'page'])) {
             return;
         }
         
-        // 対象ユーザーかどうかチェック
-        if (!OFWN_Worklog_Settings::is_target_user()) {
-            return;
+        // 対象投稿タイプかどうかチェック（設定クラスが存在する場合のみ）
+        if (class_exists('OFWN_Worklog_Settings')) {
+            if (!OFWN_Worklog_Settings::is_target_post_type($screen->post_type)) {
+                return;
+            }
+            
+            // 対象ユーザーかどうかチェック
+            if (!OFWN_Worklog_Settings::is_target_user()) {
+                return;
+            }
+        } else {
+            // 設定クラスが存在しない場合はデフォルトで post/page のみ
+            if (!in_array($screen->post_type, ['post', 'page'])) {
+                return;
+            }
         }
         
         // Gutenberg エディタかどうかチェック
@@ -715,9 +724,13 @@ class OF_Work_Notes {
             'post_id' => get_the_ID(),
             'autoHideDelay' => 10000, // 10秒で自動消失
             'strings' => [
+                /* translators: Snackbar message asking to record work log */
                 'prompt_message' => apply_filters('of_worklog_snackbar_message', __('今回の変更の作業ログを残しますか？', 'work-notes')),
+                /* translators: Button label to write work log immediately */
                 'write_now' => __('今すぐ書く', 'work-notes'),
+                /* translators: Button label to skip work log for this time */
                 'skip_this_time' => __('今回はスルー', 'work-notes'),
+                /* translators: Prompt message for fallback work log input dialog */
                 'fallback_prompt' => __('作業ログを入力してください（空の場合はスキップされます）:', 'work-notes')
             ]
         ]);

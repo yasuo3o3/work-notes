@@ -30,7 +30,9 @@ class OFWN_Worklog_Settings {
     public function add_settings_page() {
         add_submenu_page(
             'edit.php?post_type=of_work_note',
+            /* translators: Page title for worklog settings */
             __('作業ログ設定', 'work-notes'),
+            /* translators: Menu item label for worklog settings */
             __('作業ログ設定', 'work-notes'),
             $this->get_minimum_capability(),
             'ofwn-worklog-settings',
@@ -47,7 +49,8 @@ class OFWN_Worklog_Settings {
             'type' => 'array',
             'sanitize_callback' => [$this, 'sanitize_user_ids'],
             'default' => [],
-            'show_in_rest' => false
+            'show_in_rest' => false,
+            'autoload' => false
         ]);
         
         // 対象投稿タイプ設定
@@ -55,7 +58,8 @@ class OFWN_Worklog_Settings {
             'type' => 'array',
             'sanitize_callback' => [$this, 'sanitize_post_types'],
             'default' => self::DEFAULT_POST_TYPES,
-            'show_in_rest' => false
+            'show_in_rest' => false,
+            'autoload' => false
         ]);
         
         // 最小権限設定
@@ -63,12 +67,14 @@ class OFWN_Worklog_Settings {
             'type' => 'string',
             'sanitize_callback' => [$this, 'sanitize_min_role'],
             'default' => self::DEFAULT_MIN_ROLE,
-            'show_in_rest' => false
+            'show_in_rest' => false,
+            'autoload' => false
         ]);
         
         // 設定セクション
         add_settings_section(
             'ofwn_worklog_main',
+            /* translators: Settings section title for worklog prompting */
             __('作業ログ促し設定', 'work-notes'),
             [$this, 'render_settings_section'],
             'ofwn_worklog_settings'
@@ -77,6 +83,7 @@ class OFWN_Worklog_Settings {
         // 対象ユーザー フィールド
         add_settings_field(
             self::OPT_TARGET_USERS,
+            /* translators: Field label for target users selection */
             __('対象ユーザー', 'work-notes'),
             [$this, 'render_target_users_field'],
             'ofwn_worklog_settings',
@@ -86,6 +93,7 @@ class OFWN_Worklog_Settings {
         // 対象投稿タイプ フィールド
         add_settings_field(
             self::OPT_TARGET_POST_TYPES,
+            /* translators: Field label for target post types */
             __('対象投稿タイプ', 'work-notes'),
             [$this, 'render_post_types_field'],
             'ofwn_worklog_settings',
@@ -95,6 +103,7 @@ class OFWN_Worklog_Settings {
         // 最小権限 フィールド
         add_settings_field(
             self::OPT_MIN_ROLE,
+            /* translators: Field label for settings change permissions */
             __('設定変更権限', 'work-notes'),
             [$this, 'render_min_role_field'],
             'ofwn_worklog_settings',
@@ -106,7 +115,7 @@ class OFWN_Worklog_Settings {
      * 設定用アセットを読み込み
      */
     public function enqueue_settings_assets($hook) {
-        if ($hook !== 'of_work_note_page_ofwn-worklog-settings') return;
+        if ('of_work_note_page_ofwn-worklog-settings' !== $hook) return;
         
         wp_enqueue_script(
             'ofwn-worklog-settings',
@@ -120,11 +129,14 @@ class OFWN_Worklog_Settings {
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('ofwn_worklog_settings'),
             'strings' => [
-                'search_placeholder' => __('ユーザー名またはメールアドレスで検索', 'work-notes'),
-                'add_user' => __('追加', 'work-notes'),
-                'remove_user' => __('削除', 'work-notes'),
-                'user_deleted' => __('(削除済み)', 'work-notes'),
-                'no_results' => __('該当するユーザーが見つかりません', 'work-notes'),
+                'search_placeholder' => esc_html__('ユーザー名またはメールアドレスで検索', 'work-notes'),
+                'add_user' => esc_html__('追加', 'work-notes'),
+                'remove_user' => esc_html__('削除', 'work-notes'),
+                'user_deleted' => esc_html__('(削除済み)', 'work-notes'),
+                'no_results' => esc_html__('該当するユーザーが見つかりません', 'work-notes'),
+                'no_available_users' => esc_html__('選択可能な新しいユーザーがありません。', 'work-notes'),
+                'already_added' => esc_html__('このユーザーは既に追加されています。', 'work-notes'),
+                'search_error' => esc_html__('検索中にエラーが発生しました。', 'work-notes'),
             ]
         ]);
         
@@ -181,7 +193,7 @@ class OFWN_Worklog_Settings {
                 $user_id = intval($user_id);
                 $user_key = array_search($user_id, $existing_ids);
                 
-                if ($user_key !== false) {
+                if (false !== $user_key) {
                     $users[] = $existing_users[$user_key];
                 } else {
                     // 削除済みユーザー
@@ -369,7 +381,7 @@ class OFWN_Worklog_Settings {
      */
     public function get_minimum_capability() {
         $min_role = get_option(self::OPT_MIN_ROLE, self::DEFAULT_MIN_ROLE);
-        $capability = $min_role === 'editor' ? 'edit_posts' : 'manage_options';
+        $capability = 'editor' === $min_role ? 'edit_posts' : 'manage_options';
         
         // フィルターで上書き可能
         return apply_filters('of_worklog_min_cap', $capability);
@@ -393,7 +405,7 @@ class OFWN_Worklog_Settings {
      * 指定ユーザーが対象ユーザーかどうか判定
      */
     public static function is_target_user($user_id = null) {
-        if ($user_id === null) {
+        if (null === $user_id) {
             $user_id = get_current_user_id();
         }
         
