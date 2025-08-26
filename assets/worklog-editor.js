@@ -31,6 +31,10 @@
     let showingNotice = false;
     let lastHandledAt = 0; // 同一保存サイクルでの多重実行防止
     
+    // 保存サイクル管理（1サイクル=1回表示）
+    let saveCycleId = 0;
+    let shownInThisCycle = false;
+    
     /**
      * subscribe単一登録管理
      */
@@ -85,6 +89,15 @@
                 return;
             }
             
+            // 保存開始検知（false→true遍移）で新サイクル開始
+            if (lastSaveState && !lastSaveState.isSaving && currentSaveState.isSaving) {
+                saveCycleId++;
+                shownInThisCycle = false;
+                if (DEBUG_WORKLOG) {
+                    console.log('[worklog][cycle]', 'save start', {saveCycleId, shownInThisCycle});
+                }
+            }
+            
             // 保存完了エッジ検知（ワンショット・デバウンス付き）
             if (lastSaveState && 
                 !lastSaveState.isAutosaving && 
@@ -113,12 +126,26 @@
                     triggerDetected = true;
                     lastHandledAt = now;
                     
+                    // 同一サイクル内の重複表示防止
+                    if (shownInThisCycle) {
+                        if (DEBUG_WORKLOG) {
+                            console.log('[worklog][skip]', 'S1 same-cycle', {
+                                reason: 'already shown in this save cycle',
+                                saveCycleId,
+                                shownInThisCycle
+                            });
+                        }
+                        return;
+                    }
+                    
                     if (DEBUG_WORKLOG) {
                         console.log('[worklog][trigger]', 'edge', {
                             prev: lastSaveState,
                             curr: currentSaveState,
                             conditionA,
                             conditionB,
+                            saveCycleId,
+                            shownInThisCycle,
                             epoch: now
                         });
                     }
@@ -176,6 +203,8 @@
             return;
         }
         
+        let worklogStatus = null;
+        
         try {
             // 現在の作業ログ状態を取得
             const response = await wp.apiFetch({
@@ -183,22 +212,36 @@
                 method: 'GET'
             });
             
-            const worklogStatus = response.worklog_status;
+            worklogStatus = response.worklog_status;
             
-            if (worklogStatus && worklogStatus.should_prompt) {
-                debugLog('conditions met, showing worklog prompt');
-                showWorklogPrompt(worklogStatus);
+            if (worklogStatus) {
+                if (DEBUG_WORKLOG) console.log('[worklog][ok]', 'S0 status', {worklogStatus});
             } else {
-                // 詳細な理由トレース
-                if (!worklogStatus) {
-                    if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'S0', {reason: 'no worklog_status in response', response});
-                } else if (!worklogStatus.should_prompt) {
-                    if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'C0', {reason: 'should_prompt is false', worklogStatus});
-                }
+                // S0を非ブロッキング化：空レス時はフォールバックして継続
+                if (DEBUG_WORKLOG) console.log('[worklog][warn]', 'S0 fallback: missing worklog_status (proceed)', {response});
+                worklogStatus = {status: 'unknown', should_prompt: true}; // デフォルトで通知へ進む
             }
+            
         } catch (error) {
-            if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'E0', {reason: 'API error', error});
+            // ネットワークエラー時も継続（非ブロッキング）
+            if (DEBUG_WORKLOG) console.log('[worklog][warn]', 'S0 fallback: API error (proceed)', {error});
             console.error('[worklog] 作業ログ状態の取得に失敗:', error);
+            worklogStatus = {status: 'error', should_prompt: true}; // エラー時もデフォルトで通知へ
+        }
+        
+        // 通知表示判定（S0は情報補助、ゲートではない）
+        if (worklogStatus && worklogStatus.should_prompt) {
+            if (DEBUG_WORKLOG) {
+                console.log('[worklog][proceed]', 'conditions met, showing worklog prompt', {
+                    worklogStatus,
+                    saveCycleId,
+                    shownInThisCycle
+                });
+            }
+            showWorklogPrompt(worklogStatus);
+        } else {
+            // should_promptがfalseの場合のみスキップ（これみ、本来のフィルタリング）
+            if (DEBUG_WORKLOG) console.log('[worklog][skip]', 'C0', {reason: 'should_prompt is false', worklogStatus});
         }
     }
     
@@ -249,7 +292,16 @@
                     ]
                 });
                 
-                if (DEBUG_WORKLOG) console.log('[worklog][show]', 'notice created successfully', {id: worklogNoticeId});
+                if (DEBUG_WORKLOG) {
+                    console.log('[worklog][show]', 'notice created successfully', {
+                        id: worklogNoticeId,
+                        saveCycleId,
+                        shownInThisCycle: true
+                    });
+                }
+                
+                // サイクル内表示フラグを立てる
+                shownInThisCycle = true;
                 
                 // 自動消滅タイマー（設定可能）
                 const autoHideDelay = ofwnWorklogEditor.autoHideDelay || 10000; // 10秒
@@ -479,7 +531,9 @@
             isInitialized: isInitialized,
             hasSubscription: !!subscriptionHandle,
             lastSaveState: lastSaveState,
-            currentPostId: currentPostId
+            currentPostId: currentPostId,
+            saveCycleId: saveCycleId,
+            shownInThisCycle: shownInThisCycle
         };
     };
     
