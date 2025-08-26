@@ -35,6 +35,40 @@
     let saveCycleId = 0;
     let shownInThisCycle = false;
     
+    // 編集内容ハッシュとクールダウン管理
+    let lastEditHash = null;
+    let suppressUntil = 0;
+    
+    /**
+     * 編集内容のフィンガープリントを算出（軽量32bitハッシュ）
+     */
+    function computeEditHash() {
+        try {
+            const editorSel = select('core/editor');
+            if (!editorSel) return 0;
+            
+            const content = {
+                t: editorSel.getEditedPostAttribute('title') || '',
+                c: editorSel.getEditedPostAttribute('content') || '',
+                e: editorSel.getEditedPostAttribute('excerpt') || ''
+            };
+            
+            const str = JSON.stringify(content);
+            
+            // DJB2 ハッシュ関数（軽量な32bitハッシュ）
+            let hash = 5381;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) + hash) + str.charCodeAt(i);
+                hash = hash & 0xffffffff; // 32bitに保つ
+            }
+            
+            return hash;
+        } catch (error) {
+            console.warn('[worklog] Error computing edit hash:', error);
+            return Math.random(); // エラー時はランダムで続行
+        }
+    }
+    
     /**
      * subscribe単一登録管理
      */
@@ -126,7 +160,34 @@
                     triggerDetected = true;
                     lastHandledAt = now;
                     
-                    // 同一サイクル内の重複表示防止
+                    const currentEditHash = computeEditHash();
+                    const cooldownRemain = Math.max(0, Math.ceil((suppressUntil - now) / 1000));
+                    
+                    // 多段階ガード：クールダウンチェック
+                    if (now < suppressUntil) {
+                        if (DEBUG_WORKLOG) {
+                            console.log('[worklog][skip]', 'S1 cooldown', {
+                                reason: 'within cooldown period',
+                                cooldownRemain,
+                                saveCycleId
+                            });
+                        }
+                        return;
+                    }
+                    
+                    // 多段階ガード：同一編集ハッシュチェック
+                    if (lastEditHash !== null && lastEditHash === currentEditHash) {
+                        if (DEBUG_WORKLOG) {
+                            console.log('[worklog][skip]', 'S1 same-edit-hash', {
+                                reason: 'same content hash as previous',
+                                hash: currentEditHash,
+                                saveCycleId
+                            });
+                        }
+                        return;
+                    }
+                    
+                    // 多段階ガード：同一サイクル内の重複表示防止
                     if (shownInThisCycle) {
                         if (DEBUG_WORKLOG) {
                             console.log('[worklog][skip]', 'S1 same-cycle', {
@@ -146,6 +207,8 @@
                             conditionB,
                             saveCycleId,
                             shownInThisCycle,
+                            hash: currentEditHash,
+                            cooldownRemain,
                             epoch: now
                         });
                     }
@@ -302,6 +365,10 @@
                 
                 // サイクル内表示フラグを立てる
                 shownInThisCycle = true;
+                
+                // クールダウンとハッシュ更新
+                suppressUntil = Date.now() + 60 * 1000; // 60秒間のクールダウン
+                lastEditHash = computeEditHash();
                 
                 // 自動消滅タイマー（設定可能）
                 const autoHideDelay = ofwnWorklogEditor.autoHideDelay || 10000; // 10秒
@@ -533,7 +600,10 @@
             lastSaveState: lastSaveState,
             currentPostId: currentPostId,
             saveCycleId: saveCycleId,
-            shownInThisCycle: shownInThisCycle
+            shownInThisCycle: shownInThisCycle,
+            lastEditHash: lastEditHash,
+            suppressUntil: suppressUntil,
+            cooldownRemain: Math.max(0, Math.ceil((suppressUntil - Date.now()) / 1000))
         };
     };
     
