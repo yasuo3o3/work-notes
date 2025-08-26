@@ -4,6 +4,6 @@
 .ofwn-note-item{border-left:3px solid #ddd;padding-left:8px;margin:10px 0}
 .ofwn-inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .ofwn-inline select,.ofwn-inline input[type="text"]{max-width:260px}
-.ofwn-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.ofwn-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin:0;}
 .column-ofwn_status{width:90px}
 .column-ofwn_date{width:120px}
