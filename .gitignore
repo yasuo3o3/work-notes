@@ -49,3 +49,4 @@ wp-config.php
 
 update-changelog.sh
 /.history/
+.history/
