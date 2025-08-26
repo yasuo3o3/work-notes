@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<ruleset name="Work Notes WPCS">
+  <file>./</file>
+  <exclude-pattern>vendor/*</exclude-pattern>
+  <exclude-pattern>languages/*</exclude-pattern>
+  <exclude-pattern>node_modules/*</exclude-pattern>
+  
+  <rule ref="WordPress"/>
+  <rule ref="WordPress-Extra"/>
+  <rule ref="WordPress-Docs"/>
+  
+  <config name="testVersion" value="8.0-"/>
+  
+  <!-- 引数と出力の詳細設定 -->
+  <arg value="p"/>
+  <arg name="colors"/>
+  <arg name="extensions" value="php"/>
+  
+  <!-- WordPress.Security.EscapeOutput を強制 -->
+  <rule ref="WordPress.Security.EscapeOutput"/>
+  
+  <!-- WordPress.WP.I18n を強制（翻訳関数チェック） -->
+  <rule ref="WordPress.WP.I18n">
+    <properties>
+      <property name="text_domain" type="array">
+        <element value="work-notes"/>
+      </properties>
+    </properties>
+  </rule>
+</ruleset>

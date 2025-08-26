@@ -22,13 +22,13 @@ class OFWN_List_Table extends WP_List_Table {
 
     public function get_columns() {
         return [
-            'ofwn_date'   => '実施日',
-            'title'       => 'タイトル',
-            'ofwn_status' => 'ステータス',
-            'ofwn_requester' => '依頼元',
-            'ofwn_worker' => '担当者',
-            'ofwn_target' => '対象',
-            'author'      => '作成者',
+            'ofwn_date'   => __('実施日', 'work-notes'),
+            'title'       => __('タイトル', 'work-notes'),
+            'ofwn_status' => __('ステータス', 'work-notes'),
+            'ofwn_requester' => __('依頼元', 'work-notes'),
+            'ofwn_worker' => __('担当者', 'work-notes'),
+            'ofwn_target' => __('対象', 'work-notes'),
+            'author'      => __('作成者', 'work-notes'),
         ];
     }
 
@@ -50,35 +50,35 @@ class OFWN_List_Table extends WP_List_Table {
         $to       = isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : '';
 
         echo '<div class="ofwn-filter-row">';
-        echo '<label>ステータス <select name="status"><option value="">すべて</option>';
+        echo '<label>' . esc_html__('ステータス', 'work-notes') . ' <select name="status"><option value="">' . esc_html__('すべて', 'work-notes') . '</option>';
         foreach (['依頼','対応中','完了'] as $s) {
             printf('<option value="%1$s"%2$s>%1$s</option>', esc_attr($s), selected($status,$s,false));
         }
         echo '</select></label>';
 
-        echo '<label>依頼元 <select name="requester"><option value="">すべて</option>';
+        echo '<label>' . esc_html__('依頼元', 'work-notes') . ' <select name="requester"><option value="">' . esc_html__('すべて', 'work-notes') . '</option>';
         foreach ($this->requesters as $r) {
             printf('<option value="%1$s"%2$s>%1$s</option>', esc_attr($r), selected($requester,$r,false));
         }
         echo '</select></label>';
 
-        echo '<label>担当者 <select name="worker"><option value="">すべて</option>';
+        echo '<label>' . esc_html__('担当者', 'work-notes') . ' <select name="worker"><option value="">' . esc_html__('すべて', 'work-notes') . '</option>';
         foreach ($this->workers as $w) {
             printf('<option value="%1$s"%2$s>%1$s</option>', esc_attr($w), selected($worker,$w,false));
         }
         echo '</select></label>';
 
-        echo '<label>対象タイプ <select name="target_type">
-                <option value="">すべて</option>
-                <option value="post" '.selected($tt,'post',false).'>投稿/固定ページ</option>
-                <option value="site" '.selected($tt,'site',false).'>サイト全体/設定/テーマ</option>
-                <option value="other" '.selected($tt,'other',false).'>その他</option>
+        echo '<label>' . esc_html__('対象タイプ', 'work-notes') . ' <select name="target_type">
+                <option value="">' . esc_html__('すべて', 'work-notes') . '</option>
+                <option value="post" '.selected($tt,'post',false).'>' . esc_html__('投稿/固定ページ', 'work-notes') . '</option>
+                <option value="site" '.selected($tt,'site',false).'>' . esc_html__('サイト全体/設定/テーマ', 'work-notes') . '</option>
+                <option value="other" '.selected($tt,'other',false).'>' . esc_html__('その他', 'work-notes') . '</option>
               </select></label>';
 
-        echo '<label>実施日: <input type="date" name="date_from" value="'.esc_attr($from).'"> 〜 ';
+        echo '<label>' . esc_html__('実施日', 'work-notes') . ': <input type="date" name="date_from" value="'.esc_attr($from).'"> 〜 ';
         echo '<input type="date" name="date_to" value="'.esc_attr($to).'"></label>';
 
-        submit_button('絞り込み', 'secondary', '', false);
+        submit_button(__('絞り込み', 'work-notes'), 'secondary', '', false);
         echo '</div>';
     }
 
@@ -86,7 +86,7 @@ class OFWN_List_Table extends WP_List_Table {
         $base_url = remove_query_arg(['status','paged']);
         $counts = $this->status_counts();
         $views = [];
-        $statuses = ['' => 'すべて', '完了' => '完了', '対応中' => '対応中', '依頼' => '依頼'];
+        $statuses = ['' => __('すべて', 'work-notes'), '完了' => __('完了', 'work-notes'), '対応中' => __('対応中', 'work-notes'), '依頼' => __('依頼', 'work-notes')];
         foreach ($statuses as $key => $label) {
             $url = $key === '' ? $base_url : add_query_arg('status', $key, $base_url);
             $count = $counts[$key ?: 'all'] ?? 0;
@@ -99,20 +99,34 @@ class OFWN_List_Table extends WP_List_Table {
     }
 
     private function status_counts() {
-        $out = ['all'=>0,'依頼'=>0,'対応中'=>0,'完了'=>0];
-        $q = new WP_Query([
-            'post_type' => OF_Work_Notes::CPT,
-            'posts_per_page' => -1,
-            'fields' => 'ids',
-            'no_found_rows' => true,
-        ]);
-        $out['all'] = $q->post_count;
-        if ($q->posts) {
-            foreach ($q->posts as $pid) {
-                $s = get_post_meta($pid, '_ofwn_status', true) ?: '依頼';
-                if (isset($out[$s])) $out[$s]++;
+        global $wpdb;
+        $out = ['all' => 0, '依頼' => 0, '対応中' => 0, '完了' => 0];
+        
+        // 全件数
+        $all_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish'",
+            OF_Work_Notes::CPT
+        ));
+        $out['all'] = (int)$all_count;
+        
+        // ステータス別件数（LEFT JOINでメタデータと結合）
+        $status_counts = $wpdb->get_results($wpdb->prepare(
+            "SELECT COALESCE(pm.meta_value, '依頼') as status, COUNT(*) as count 
+             FROM {$wpdb->posts} p 
+             LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ofwn_status'
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+             GROUP BY COALESCE(pm.meta_value, '依頼')",
+            OF_Work_Notes::CPT
+        ));
+        
+        // 結果をマップに設定
+        foreach ($status_counts as $row) {
+            $status = $row->status;
+            if (isset($out[$status])) {
+                $out[$status] = (int)$row->count;
             }
         }
+        
         return $out;
     }
 
@@ -200,7 +214,7 @@ class OFWN_List_Table extends WP_List_Table {
                 return '<strong><a href="'.esc_url($item['edit_link']).'">'.esc_html($item['title']).'</a></strong>';
             case 'ofwn_status':
                 $cls = $item['status']==='完了' ? 'done' : '';
-                return '<span class="ofwn-badge '.$cls.'">'.esc_html($item['status']).'</span>';
+                return '<span class="ofwn-badge ' . esc_attr($cls) . '">' . esc_html($item['status']) . '</span>';
             case 'ofwn_requester':
                 return esc_html($item['requester'] ?: '—');
             case 'ofwn_worker':

@@ -1,0 +1,25 @@
+{
+  "name": "netservice/work-notes",
+  "description": "WordPress plugin for work notes and task management",
+  "type": "wordpress-plugin",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "php": ">=8.0"
+  },
+  "require-dev": {
+    "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+    "wp-coding-standards/wpcs": "^3.0",
+    "phpcompatibility/phpcompatibility-wp": "^2.1"
+  },
+  "scripts": {
+    "lint": "phpcs --standard=phpcs.xml",
+    "fix": "phpcbf --standard=phpcs.xml",
+    "lint:errors": "phpcs --standard=phpcs.xml --error-severity=1 --warning-severity=8",
+    "test": "composer run lint:errors"
+  },
+  "config": {
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    }
+  }
+}

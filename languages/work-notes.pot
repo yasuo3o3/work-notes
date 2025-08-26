@@ -1,0 +1,230 @@
+# Copyright (C) 2024 Work Notes（作業メモ）
+# This file is distributed under the same license as the Work Notes（作業メモ） package.
+msgid ""
+msgstr ""
+"Project-Id-Version: Work Notes（作業メモ） 0.05\n"
+"Report-Msgid-Bugs-To: https://netservice.jp/\n"
+"POT-Creation-Date: 2024-08-26 15:00+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"X-Generator: WP-CLI 2.9.0\n"
+
+#: includes/class-of-work-notes.php:34
+#: includes/class-of-work-notes.php:35
+#: includes/class-of-work-notes.php:42
+msgid "作業メモ"
+msgstr ""
+
+#: includes/class-of-work-notes.php:36
+msgid "新規メモ"
+msgstr ""
+
+#: includes/class-of-work-notes.php:37
+msgid "作業メモを追加"
+msgstr ""
+
+#: includes/class-of-work-notes.php:38
+msgid "作業メモを編集"
+msgstr ""
+
+#: includes/class-of-work-notes.php:39
+msgid "新規作業メモ"
+msgstr ""
+
+#: includes/class-of-work-notes.php:40
+msgid "作業メモを表示"
+msgstr ""
+
+#: includes/class-of-work-notes.php:41
+msgid "作業メモを検索"
+msgstr ""
+
+#: includes/class-of-work-notes.php:107
+#: includes/class-of-work-notes.php:108
+msgid "作業メモ設定"
+msgstr ""
+
+#: includes/class-of-work-notes.php:108
+msgid "設定"
+msgstr ""
+
+#: includes/class-of-work-notes.php:134
+msgid "マスター管理"
+msgstr ""
+
+#: includes/class-of-work-notes.php:136
+msgid "依頼元マスター（1行1件）"
+msgstr ""
+
+#: includes/class-of-work-notes.php:139
+msgid "ここに入力した内容が「依頼元」のセレクトに表示されます。"
+msgstr ""
+
+#: includes/class-of-work-notes.php:142
+msgid "担当者マスター（1行1件）"
+msgstr ""
+
+#: includes/class-of-work-notes.php:145
+msgid "ここに入力した内容が「担当者」のセレクトに表示されます。"
+msgstr ""
+
+#: includes/class-of-work-notes.php:169
+msgid "保存"
+msgstr ""
+
+#: includes/class-of-work-notes.php:174
+#: includes/class-of-work-notes.php:176
+msgid "作業メモ属性"
+msgstr ""
+
+#: includes/class-of-work-notes.php:225
+msgid "対象タイプ"
+msgstr ""
+
+#: includes/class-of-work-notes.php:227
+msgid "（任意）"
+msgstr ""
+
+#: includes/class-of-work-notes.php:228
+msgid "投稿/固定ページ"
+msgstr ""
+
+#: includes/class-of-work-notes.php:229
+msgid "サイト全体/設定/テーマ"
+msgstr ""
+
+#: includes/class-of-work-notes.php:230
+msgid "その他"
+msgstr ""
+
+#: includes/class-of-work-notes.php:234
+msgid "対象ID（投稿IDなど）"
+msgstr ""
+
+#: includes/class-of-work-notes.php:238
+msgid "対象ラベル（例：トップページ、パーマリンク設定 等）"
+msgstr ""
+
+#: includes/class-of-work-notes.php:242
+#: includes/class-of-work-notes.php:380
+msgid "依頼元"
+msgstr ""
+
+#: includes/class-of-work-notes.php:246
+#: includes/class-of-work-notes.php:399
+msgid "担当者"
+msgstr ""
+
+#: includes/class-of-work-notes.php:250
+#: includes/class-of-work-notes.php:387
+msgid "ステータス"
+msgstr ""
+
+#: includes/class-of-work-notes.php:252
+#: includes/class-of-work-notes.php:389
+msgid "依頼"
+msgstr ""
+
+#: includes/class-of-work-notes.php:253
+#: includes/class-of-work-notes.php:390
+msgid "対応中"
+msgstr ""
+
+#: includes/class-of-work-notes.php:254
+#: includes/class-of-work-notes.php:391
+msgid "完了"
+msgstr ""
+
+#: includes/class-of-work-notes.php:258
+#: includes/class-of-work-notes.php:395
+msgid "実施日"
+msgstr ""
+
+#: includes/class-of-work-notes.php:311
+msgid "タイトル"
+msgstr ""
+
+#: includes/class-of-work-notes.php:366
+msgid "編集"
+msgstr ""
+
+#: includes/class-of-work-notes.php:370
+msgid "このコンテンツに紐づく作業メモはまだありません。"
+msgstr ""
+
+#: includes/class-of-work-notes.php:378
+msgid "この投稿に作業メモを追加"
+msgstr ""
+
+#: includes/class-of-work-notes.php:384
+msgid "内容（作業メモ本文）"
+msgstr ""
+
+#: includes/class-of-work-notes.php:477
+#: includes/class-of-work-notes.php:478
+#: includes/class-of-work-notes.php:498
+msgid "作業一覧"
+msgstr ""
+
+#: includes/class-of-work-notes.php:502
+msgid "キーワード検索"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:25
+msgid "実施日"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:26
+msgid "タイトル"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:27
+msgid "ステータス"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:28
+msgid "依頼元"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:29
+msgid "担当者"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:30
+msgid "対象"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:31
+msgid "作成者"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:53
+#: includes/class-ofwn-list-table.php:59
+#: includes/class-ofwn-list-table.php:65
+#: includes/class-ofwn-list-table.php:72
+msgid "すべて"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:71
+msgid "対象タイプ"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:81
+msgid "絞り込み"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:89
+msgid "完了"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:89
+msgid "対応中"
+msgstr ""
+
+#: includes/class-ofwn-list-table.php:89
+msgid "依頼"
+msgstr ""

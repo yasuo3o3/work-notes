@@ -31,15 +31,15 @@ class OF_Work_Notes {
     public function register_cpt() {
         register_post_type(self::CPT, [
             'labels' => [
-                'name' => '作業メモ',
-                'singular_name' => '作業メモ',
-                'add_new' => '新規メモ',
-                'add_new_item' => '作業メモを追加',
-                'edit_item' => '作業メモを編集',
-                'new_item' => '新規作業メモ',
-                'view_item' => '作業メモを表示',
-                'search_items' => '作業メモを検索',
-                'menu_name' => '作業メモ',
+                'name' => __('作業メモ', 'work-notes'),
+                'singular_name' => __('作業メモ', 'work-notes'),
+                'add_new' => __('新規メモ', 'work-notes'),
+                'add_new_item' => __('作業メモを追加', 'work-notes'),
+                'edit_item' => __('作業メモを編集', 'work-notes'),
+                'new_item' => __('新規作業メモ', 'work-notes'),
+                'view_item' => __('作業メモを表示', 'work-notes'),
+                'search_items' => __('作業メモを検索', 'work-notes'),
+                'menu_name' => __('作業メモ', 'work-notes'),
             ],
             'public' => false,
             'show_ui' => true,
@@ -52,9 +52,54 @@ class OF_Work_Notes {
     }
 
     public function enqueue_admin_assets($hook) {
-        // 管理画面のみ
-        wp_enqueue_style('ofwn-admin', OFWN_URL.'assets/admin.css', [], filemtime(OFWN_DIR.'assets/admin.css'));
-        wp_enqueue_script('ofwn-admin', OFWN_URL.'assets/admin.js', [], filemtime(OFWN_DIR.'assets/admin.js'), true);
+        // 作業メモ関連画面のみで読み込み
+        $screen = get_current_screen();
+        
+        // メイン条件: 作業メモのpost_typeまたは関連ページ
+        $is_work_notes_screen = false;
+        
+        if ($screen && $screen->post_type === self::CPT) {
+            $is_work_notes_screen = true;
+        }
+        
+        // 作業メモの管理ページ
+        if (in_array($hook, [
+            'of_work_note_page_ofwn-settings',
+            'of_work_note_page_ofwn-list'
+        ])) {
+            $is_work_notes_screen = true;
+        }
+        
+        // edit.php?post_type=of_work_note
+        if ($hook === 'edit.php' && isset($_GET['post_type']) && $_GET['post_type'] === self::CPT) {
+            $is_work_notes_screen = true;
+        }
+        
+        // 個別投稿/固定ページ編集画面（作業メモボックス表示のため）
+        if (in_array($hook, ['post.php', 'post-new.php']) && $screen) {
+            $public_post_types = get_post_types(['public' => true], 'names');
+            if (in_array($screen->post_type, $public_post_types)) {
+                $is_work_notes_screen = true;
+            }
+        }
+        
+        if (!$is_work_notes_screen) {
+            return;
+        }
+        
+        wp_enqueue_style(
+            'ofwn-admin', 
+            OFWN_URL . 'assets/admin.css', 
+            [], 
+            filemtime(OFWN_DIR . 'assets/admin.css')
+        );
+        wp_enqueue_script(
+            'ofwn-admin', 
+            OFWN_URL . 'assets/admin.js', 
+            [], 
+            filemtime(OFWN_DIR . 'assets/admin.js'), 
+            true
+        );
     }
 
     /* ===== 設定（マスター管理） ===== */
@@ -62,8 +107,8 @@ class OF_Work_Notes {
     public function add_settings_page() {
         add_submenu_page(
             'edit.php?post_type=' . self::CPT,
-            '作業メモ設定',
-            '設定',
+            __('作業メモ設定', 'work-notes'),
+            __('設定', 'work-notes'),
             'manage_options',
             'ofwn-settings',
             [$this, 'render_settings_page']
@@ -72,24 +117,32 @@ class OF_Work_Notes {
 
     public function register_settings() {
         register_setting('ofwn_settings', self::OPT_REQUESTERS, [
-            'type' => 'array','sanitize_callback' => [$this, 'sanitize_list'],'default' => []
+            'type' => 'array',
+            'sanitize_callback' => [$this, 'sanitize_list'],
+            'default' => [],
+            'show_in_rest' => false,
+            'autoload' => false
         ]);
         register_setting('ofwn_settings', self::OPT_WORKERS, [
-            'type' => 'array','sanitize_callback' => [$this, 'sanitize_list'],'default' => $this->default_workers()
+            'type' => 'array',
+            'sanitize_callback' => [$this, 'sanitize_list'],
+            'default' => $this->default_workers(),
+            'show_in_rest' => false,
+            'autoload' => false
         ]);
 
-        add_settings_section('ofwn_section_main', 'マスター管理', '__return_false', 'ofwn_settings');
+        add_settings_section('ofwn_section_main', __('マスター管理', 'work-notes'), '__return_false', 'ofwn_settings');
 
-        add_settings_field(self::OPT_REQUESTERS, '依頼元マスター（1行1件）', function(){
+        add_settings_field(self::OPT_REQUESTERS, __('依頼元マスター（1行1件）', 'work-notes'), function(){
             $v = get_option(self::OPT_REQUESTERS, []);
             echo '<textarea name="'.esc_attr(self::OPT_REQUESTERS).'[]" rows="8" style="width:600px;">'.esc_textarea(implode("\n", $v))."</textarea>";
-            echo '<p class="description">ここに入力した内容が「依頼元」のセレクトに表示されます。</p>';
+            echo '<p class="description">' . esc_html__('ここに入力した内容が「依頼元」のセレクトに表示されます。', 'work-notes') . '</p>';
         }, 'ofwn_settings', 'ofwn_section_main');
 
-        add_settings_field(self::OPT_WORKERS, '担当者マスター（1行1件）', function(){
+        add_settings_field(self::OPT_WORKERS, __('担当者マスター（1行1件）', 'work-notes'), function(){
             $v = get_option(self::OPT_WORKERS, $this->default_workers());
             echo '<textarea name="'.esc_attr(self::OPT_WORKERS).'[]" rows="8" style="width:600px;">'.esc_textarea(implode("\n", $v))."</textarea>";
-            echo '<p class="description">ここに入力した内容が「担当者」のセレクトに表示されます。</p>';
+            echo '<p class="description">' . esc_html__('ここに入力した内容が「担当者」のセレクトに表示されます。', 'work-notes') . '</p>';
         }, 'ofwn_settings', 'ofwn_section_main');
     }
 
@@ -114,19 +167,19 @@ class OF_Work_Notes {
 
     public function render_settings_page() {
         if (!current_user_can('manage_options')) return;
-        echo '<div class="wrap"><h1>作業メモ設定</h1><form method="post" action="options.php">';
+        echo '<div class="wrap"><h1>' . esc_html__('作業メモ設定', 'work-notes') . '</h1><form method="post" action="options.php">';
         settings_fields('ofwn_settings');
         do_settings_sections('ofwn_settings');
-        submit_button('保存');
+        submit_button(__('保存', 'work-notes'));
         echo '</form></div>';
     }
 
     /* ===== メタボックス ===== */
 
     public function add_meta_boxes() {
-        add_meta_box('ofwn_fields', '作業メモ属性', [$this, 'box_note_fields'], self::CPT, 'side', 'default');
+        add_meta_box('ofwn_fields', __('作業メモ属性', 'work-notes'), [$this, 'box_note_fields'], self::CPT, 'side', 'default');
         foreach (get_post_types(['public' => true], 'names') as $pt) {
-            add_meta_box('ofwn_parent', '作業メモ', [$this, 'box_parent_notes'], $pt, 'normal', 'default');
+            add_meta_box('ofwn_parent', __('作業メモ', 'work-notes'), [$this, 'box_parent_notes'], $pt, 'normal', 'default');
         }
     }
 
@@ -147,9 +200,9 @@ class OF_Work_Notes {
                 selected($current_value, $opt, false)
             );
         }
-        echo '<option value="__custom__"'.selected($is_custom, true, false).'>'.$placeholder.'</option>';
+        echo '<option value="__custom__"'.selected($is_custom, true, false).'>'.esc_html($placeholder).'</option>';
         echo '</select>';
-        echo ' <input type="text" data-ofwn-custom="'.esc_attr($name).'_select" name="'.esc_attr($name).'" value="'.esc_attr($current_value).'" placeholder="'.$placeholder.'" '.($is_custom?'':'style="display:none"').'>';
+        echo ' <input type="text" data-ofwn-custom="'.esc_attr($name).'_select" name="'.esc_attr($name).'" value="'.esc_attr($current_value).'" placeholder="'.esc_attr($placeholder).'" '.($is_custom?'':'style="display:none"').'>';
         echo '</div>';
     }
 
@@ -169,40 +222,40 @@ class OF_Work_Notes {
         $wrk_opts = get_option(self::OPT_WORKERS, $this->default_workers());
 
         ?>
-        <p><label>対象タイプ<br>
+        <p><label><?php esc_html_e('対象タイプ', 'work-notes'); ?><br>
             <select name="ofwn_target_type">
-                <option value="">（任意）</option>
-                <option value="post" <?php selected($target_type,'post');?>>投稿/固定ページ</option>
-                <option value="site" <?php selected($target_type,'site');?>>サイト全体/設定/テーマ</option>
-                <option value="other" <?php selected($target_type,'other');?>>その他</option>
+                <option value=""><?php esc_html_e('（任意）', 'work-notes'); ?></option>
+                <option value="post" <?php selected($target_type,'post');?>><?php esc_html_e('投稿/固定ページ', 'work-notes'); ?></option>
+                <option value="site" <?php selected($target_type,'site');?>><?php esc_html_e('サイト全体/設定/テーマ', 'work-notes'); ?></option>
+                <option value="other" <?php selected($target_type,'other');?>><?php esc_html_e('その他', 'work-notes'); ?></option>
             </select>
         </label></p>
 
-        <p><label>対象ID（投稿IDなど）<br>
+        <p><label><?php esc_html_e('対象ID（投稿IDなど）', 'work-notes'); ?><br>
             <input type="text" name="ofwn_target_id" value="<?php echo esc_attr($target_id);?>" style="width:100%;">
         </label></p>
 
-        <p><label>対象ラベル（例：トップページ、パーマリンク設定 等）<br>
+        <p><label><?php esc_html_e('対象ラベル（例：トップページ、パーマリンク設定 等）', 'work-notes'); ?><br>
             <input type="text" name="ofwn_target_label" value="<?php echo esc_attr($target_label);?>" style="width:100%;">
         </label></p>
 
-        <p><label>依頼元</label><br>
-            <?php $this->render_select_with_custom('ofwn_requester', $req_opts, $requester, '依頼元を手入力'); ?>
+        <p><label><?php esc_html_e('依頼元', 'work-notes'); ?></label><br>
+            <?php $this->render_select_with_custom('ofwn_requester', $req_opts, $requester, __('依頼元を手入力', 'work-notes')); ?>
         </p>
 
-        <p><label>担当者</label><br>
-            <?php $this->render_select_with_custom('ofwn_worker', $wrk_opts, $worker, '担当者を手入力'); ?>
+        <p><label><?php esc_html_e('担当者', 'work-notes'); ?></label><br>
+            <?php $this->render_select_with_custom('ofwn_worker', $wrk_opts, $worker, __('担当者を手入力', 'work-notes')); ?>
         </p>
 
-        <p><label>ステータス<br>
+        <p><label><?php esc_html_e('ステータス', 'work-notes'); ?><br>
             <select name="ofwn_status">
-                <option <?php selected($status,'依頼');?>>依頼</option>
-                <option <?php selected($status,'対応中');?>>対応中</option>
-                <option <?php selected($status,'完了');?>>完了</option>
+                <option value="依頼" <?php selected($status,'依頼');?>><?php esc_html_e('依頼', 'work-notes'); ?></option>
+                <option value="対応中" <?php selected($status,'対応中');?>><?php esc_html_e('対応中', 'work-notes'); ?></option>
+                <option value="完了" <?php selected($status,'完了');?>><?php esc_html_e('完了', 'work-notes'); ?></option>
             </select>
         </label></p>
 
-        <p><label>実施日<br>
+        <p><label><?php esc_html_e('実施日', 'work-notes'); ?><br>
             <input type="date" name="ofwn_work_date" value="<?php echo esc_attr($date);?>">
         </label></p>
         <?php
@@ -255,7 +308,7 @@ class OF_Work_Notes {
     public function cols($cols) {
         $new = [];
         $new['cb'] = $cols['cb'] ?? '';
-        $new['title'] = 'タイトル';
+        $new['title'] = __('タイトル', 'work-notes');
         $new['ofwn_target'] = '対象';
         $new['ofwn_status'] = 'ステータス';
         $new['author'] = '作成者';
@@ -279,7 +332,7 @@ class OF_Work_Notes {
         if ($col === 'ofwn_status') {
             $s = $this->get_meta($post_id, '_ofwn_status','依頼');
             $cls = $s==='完了' ? 'done' : '';
-            echo '<span class="ofwn-badge '.$cls.'">'.esc_html($s).'</span>';
+            echo '<span class="ofwn-badge ' . esc_attr($cls) . '">' . esc_html($s) . '</span>';
         }
     }
 
@@ -307,14 +360,14 @@ class OF_Work_Notes {
                 $date = get_post_meta($n->ID, '_ofwn_work_date', true);
                 echo '<div class="ofwn-note-item">';
                 echo '<strong>'.esc_html(get_the_title($n)).'</strong> ';
-                echo '<span class="ofwn-badge '.($status==='完了'?'done':'').'">'.esc_html($status ?: '—').'</span><br>';
+                echo '<span class="ofwn-badge ' . esc_attr($status==='完了'?'done':'') . '">' . esc_html($status ?: '—') . '</span><br>';
                 echo wpautop(esc_html($n->post_content));
                 echo '<small>依頼元: '.esc_html($req ?: '—').' / 担当: '.esc_html($worker ?: '—').' / 実施日: '.esc_html($date ?: '—').'</small>';
-                echo ' / <a href="'.esc_url(get_edit_post_link($n->ID)).'">編集</a>';
+                echo ' / <a href="'.esc_url(get_edit_post_link($n->ID)).'">' . esc_html__('編集', 'work-notes') . '</a>';
                 echo '</div>';
             }
         } else {
-            echo '<p>このコンテンツに紐づく作業メモはまだありません。</p>';
+            echo '<p>' . esc_html__('このコンテンツに紐づく作業メモはまだありません。', 'work-notes') . '</p>';
         }
         echo '</div>';
 
@@ -322,28 +375,28 @@ class OF_Work_Notes {
         $wrk_opts = get_option(self::OPT_WORKERS, $this->default_workers());
         ?>
         <hr>
-        <h4>この投稿に作業メモを追加</h4>
+        <h4><?php esc_html_e('この投稿に作業メモを追加', 'work-notes'); ?></h4>
 
-        <p><label>依頼元</label><br>
+        <p><label><?php esc_html_e('依頼元', 'work-notes'); ?></label><br>
             <?php $this->render_select_with_custom('ofwn_quick_requester', $req_opts, ''); ?>
         </p>
 
-        <p><label>内容（作業メモ本文）<br><textarea name="ofwn_quick_content" rows="4" style="width:100%;"></textarea></label></p>
+        <p><label><?php esc_html_e('内容（作業メモ本文）', 'work-notes'); ?><br><textarea name="ofwn_quick_content" rows="4" style="width:100%;"></textarea></label></p>
 
         <p class="ofwn-inline">
-            <label>ステータス
+            <label><?php esc_html_e('ステータス', 'work-notes'); ?>
                 <select name="ofwn_quick_status">
-                    <option>依頼</option>
-                    <option>対応中</option>
-                    <option>完了</option>
+                    <option value="依頼"><?php esc_html_e('依頼', 'work-notes'); ?></option>
+                    <option value="対応中"><?php esc_html_e('対応中', 'work-notes'); ?></option>
+                    <option value="完了"><?php esc_html_e('完了', 'work-notes'); ?></option>
                 </select>
             </label>
 
-            <label>実施日
+            <label><?php esc_html_e('実施日', 'work-notes'); ?>
                 <input type="date" name="ofwn_quick_date" value="<?php echo esc_attr(current_time('Y-m-d'));?>">
             </label>
 
-            <label>担当者</label>
+            <label><?php esc_html_e('担当者', 'work-notes'); ?></label>
             <?php $this->render_select_with_custom('ofwn_quick_worker', $wrk_opts, wp_get_current_user()->display_name); ?>
         </p>
         <?php
@@ -421,8 +474,8 @@ class OF_Work_Notes {
     public function add_list_page() {
         add_submenu_page(
             'edit.php?post_type=' . self::CPT,
-            '作業一覧',
-            '作業一覧',
+            __('作業一覧', 'work-notes'),
+            __('作業一覧', 'work-notes'),
             'edit_posts',
             'ofwn-list',
             [$this, 'render_list_page']
@@ -442,11 +495,11 @@ class OF_Work_Notes {
         ]);
         $table->prepare_items();
 
-        echo '<div class="wrap"><h1 class="wp-heading-inline">作業一覧</h1>';
+        echo '<div class="wrap"><h1 class="wp-heading-inline">' . esc_html__('作業一覧', 'work-notes') . '</h1>';
         echo '<form method="get">';
         echo '<input type="hidden" name="post_type" value="'.esc_attr(self::CPT).'">';
         echo '<input type="hidden" name="page" value="ofwn-list">';
-        $table->search_box('キーワード検索', 'ofwn-search');
+        $table->search_box(__('キーワード検索', 'work-notes'), 'ofwn-search');
         $table->views();
         $table->display();
         echo '</form></div>';
