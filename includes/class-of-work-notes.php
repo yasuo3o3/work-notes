@@ -677,6 +677,11 @@ class OF_Work_Notes {
      * 作業ログエディタ用アセットを読み込み
      */
     public function enqueue_worklog_editor_assets($hook) {
+        // 緊急停止フラグ
+        if (defined('OFWN_DISABLE_WORKLOG_NOTICE') && OFWN_DISABLE_WORKLOG_NOTICE) {
+            return;
+        }
+        
         // 早期リターン：投稿編集画面のみ
         if (!in_array($hook, ['post.php', 'post-new.php'])) {
             return;
@@ -688,22 +693,29 @@ class OF_Work_Notes {
             return;
         }
         
-        // 対象投稿タイプかどうかチェック（設定クラスが存在する場合のみ）
-        if (class_exists('OFWN_Worklog_Settings')) {
+        // モード管理による分岐
+        $mode = get_option('ofwn_worklog_mode', 'manual');
+        
+        if ($mode === 'disabled') {
+            return;
+        }
+        
+        if ($mode === 'manual') {
+            // 厳密チェック
+            if (!class_exists('OFWN_Worklog_Settings')) {
+                return;
+            }
+            
             if (!OFWN_Worklog_Settings::is_target_post_type($screen->post_type)) {
                 return;
             }
             
-            // 対象ユーザーかどうかチェック
             if (!OFWN_Worklog_Settings::is_target_user()) {
                 return;
             }
-        } else {
-            // 設定クラスが存在しない場合はデフォルトで post/page のみ
-            if (!in_array($screen->post_type, ['post', 'page'])) {
-                return;
-            }
         }
+        
+        // force モードの場合は上記チェックをスキップ
         
         // Gutenberg エディタかどうかチェック
         if (!$this->is_gutenberg_page()) {
@@ -722,6 +734,7 @@ class OF_Work_Notes {
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('ofwn_worklog_nonce'),
             'post_id' => get_the_ID(),
+            'mode' => $mode,
             'autoHideDelay' => 10000, // 10秒で自動消失
             'strings' => [
                 /* translators: Snackbar message asking to record work log */

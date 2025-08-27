@@ -5,6 +5,11 @@
 (function() {
     'use strict';
     
+    // 緊急停止ガード
+    if (window.OFWN_DISABLE_WORKLOG_NOTICE === true) {
+        return;
+    }
+    
     // デバッグログのON/OFF制御
     const DEBUG_WORKLOG = true;
     
@@ -99,17 +104,31 @@
      * 通知表示判定とフィルタリング
      */
     function checkAndShowNotice() {
+        // ガード1: 変更検知（Client）
+        const editorSel = select('core/editor');
+        if (!editorSel) {
+            debugLog('skip', 'no editor selector');
+            return;
+        }
+        
+        // 変更がない場合は絶対に表示しない（3段ガード）
+        if (!wasDirtyBeforeSave) {
+            debugLog('skip', '3-guard: no changes detected before save');
+            return;
+        }
+        
+        // オートセーブは除外（3段ガード）
+        const isCurrentlyAutosaving = editorSel.isAutosavingPost && editorSel.isAutosavingPost();
+        if (isCurrentlyAutosaving) {
+            debugLog('skip', '3-guard: autosave detected');
+            return;
+        }
+        
         const now = Date.now();
         
         // フェイルセーフ: オートセーブは除外
         if (prevState && prevState.isAutosaving) {
             debugLog('skip', 'autosave cycle', {reason: 'autosave'});
-            return;
-        }
-        
-        // フェイルセーフ: 変更なし保存は除外
-        if (!wasDirtyBeforeSave) {
-            debugLog('skip', 'no changes before save', {reason: 'not dirty'});
             return;
         }
         
@@ -132,7 +151,21 @@
             return;
         }
         
-        // 強制表示フック（開発用）
+        // モード判定
+        const mode = window.ofwnWorklogEditor?.mode || 'manual';
+        
+        if (mode === 'disabled') {
+            debugLog('skip', 'mode disabled');
+            return;
+        }
+        
+        if (mode === 'force') {
+            debugLog('force', 'force mode - showing notice');
+            showWorklogNotice();
+            return;
+        }
+        
+        // 強制表示フック（開発用・manual/forceモード共通）
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('worklog_test') === '1') {
             debugLog('force', 'test mode activated');
@@ -145,7 +178,7 @@
             return;
         }
         
-        // worklog_status の確認（非ブロッキング）
+        // manual モード: サーバー判定必須
         checkWorklogStatusAndShow();
     }
     
@@ -158,29 +191,27 @@
             return;
         }
         
-        let shouldShow = true; // デフォルトで表示（非ブロッキング）
+        let shouldShow = false; // デフォルトで非表示（ブロッキング）
         
         try {
-            // 現在の作業ログ状態を取得（空でも続行）
-            const response = await wp.apiFetch({
-                path: `/wp/v2/posts/${currentPostId}?_fields=worklog_status`,
-                method: 'GET'
+            // サーバー判定を直接問い合わせ（jQuery使用）
+            const response = await new Promise((resolve, reject) => {
+                jQuery.post(window.ofwnWorklogEditor.ajax_url, {
+                    action: 'ofwn_check_should_prompt',
+                    post_id: currentPostId,
+                    nonce: window.ofwnWorklogEditor.nonce
+                }).done(resolve).fail(reject);
             });
             
-            const worklogStatus = response.worklog_status;
-            
-            if (worklogStatus) {
-                debugLog('api', 'worklog_status received', {worklogStatus});
-                shouldShow = worklogStatus.should_prompt !== false;
+            if (response.success && response.data && response.data.should_prompt === true) {
+                shouldShow = true;
+                debugLog('api', 'server approved prompt', response.data);
             } else {
-                debugLog('warn', 'worklog_status empty, proceeding with default', {response});
-                // 空レス時もデフォルトで表示
+                debugLog('api', 'server denied prompt', response);
             }
             
         } catch (error) {
-            debugLog('warn', 'API error, proceeding with default', {error});
-            console.warn('[worklog] worklog_status取得エラー（続行）:', error);
-            // APIエラー時もデフォルトで表示
+            debugLog('error', 'server check failed - will not show', {error});
         }
         
         if (shouldShow) {
@@ -194,6 +225,12 @@
      * 作業ログ固定通知を表示
      */
     function showWorklogNotice() {
+        // 緊急停止ガード（再チェック）
+        if (window.OFWN_DISABLE_WORKLOG_NOTICE === true) {
+            debugLog('disabled', 'emergency stop activated');
+            return;
+        }
+        
         try {
             const { createNotice, removeNotice } = dispatch('core/notices');
             
@@ -210,6 +247,11 @@
                         onClick: () => {
                             debugLog('click', 'write now button clicked');
                             removeNotice(worklogNoticeId);
+                            
+                            // 促し実行済みマークをサーバーに送信
+                            if (window.ofwnWorklogEditor?.ajax_url) {
+                                markPromptShown();
+                            }
                             openWorklogSidebar();
                         }
                     },
@@ -218,6 +260,11 @@
                         onClick: () => {
                             debugLog('click', 'skip button clicked');
                             removeNotice(worklogNoticeId);
+                            
+                            // 促し実行済みマークをサーバーに送信
+                            if (window.ofwnWorklogEditor?.ajax_url) {
+                                markPromptShown();
+                            }
                             // スキップ処理（必要に応じてサーバー通知）
                         }
                     }
@@ -237,6 +284,21 @@
         } catch (error) {
             console.error('[worklog] Error creating notice:', error);
         }
+    }
+    
+    /**
+     * 促し表示済みマークをサーバーに送信
+     */
+    function markPromptShown() {
+        jQuery.post(window.ofwnWorklogEditor.ajax_url, {
+            action: 'ofwn_mark_prompted',
+            post_id: currentPostId,
+            nonce: window.ofwnWorklogEditor.nonce
+        }).done(function(response) {
+            debugLog('mark', 'prompt marked as shown', response);
+        }).fail(function(error) {
+            debugLog('error', 'failed to mark prompt', error);
+        });
     }
     
     /**

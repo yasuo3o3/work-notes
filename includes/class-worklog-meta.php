@@ -23,6 +23,8 @@ class OFWN_Worklog_Meta {
         add_action('wp_ajax_ofwn_save_worklog', [$this, 'ajax_save_worklog']);
         add_action('wp_ajax_ofwn_skip_worklog', [$this, 'ajax_skip_worklog']);
         add_action('wp_ajax_ofwn_get_worklog_status', [$this, 'ajax_get_worklog_status']);
+        add_action('wp_ajax_ofwn_check_should_prompt', [$this, 'ajax_check_should_prompt']);
+        add_action('wp_ajax_ofwn_mark_prompted', [$this, 'ajax_mark_prompted']);
     }
     
     /**
@@ -380,5 +382,136 @@ class OFWN_Worklog_Meta {
         }
         
         return true;
+    }
+    
+    /**
+     * AJAX: 作業ログ促し判定
+     */
+    public function ajax_check_should_prompt() {
+        $this->verify_ajax_request();
+        
+        $post_id = intval($_POST['post_id'] ?? 0);
+        $user_id = get_current_user_id();
+        
+        if (!$post_id || !$user_id) {
+            wp_send_json_error(['message' => __('必要な情報が不足しています。', 'work-notes')]);
+        }
+        
+        if (!current_user_can('edit_post', $post_id)) {
+            wp_send_json_error(['message' => __('この投稿を編集する権限がありません。', 'work-notes')]);
+        }
+        
+        $should_prompt = $this->should_prompt_for_worklog_strict($post_id, $user_id);
+        
+        wp_send_json_success([
+            'should_prompt' => $should_prompt,
+            'post_id' => $post_id,
+            'user_id' => $user_id
+        ]);
+    }
+    
+    /**
+     * AJAX: 促し表示済みマーク
+     */
+    public function ajax_mark_prompted() {
+        $this->verify_ajax_request();
+        
+        $post_id = intval($_POST['post_id'] ?? 0);
+        $user_id = get_current_user_id();
+        
+        if (!$post_id || !$user_id) {
+            wp_send_json_error(['message' => __('必要な情報が不足しています。', 'work-notes')]);
+        }
+        
+        if (!current_user_can('edit_post', $post_id)) {
+            wp_send_json_error(['message' => __('この投稿を編集する権限がありません。', 'work-notes')]);
+        }
+        
+        $this->mark_worklog_prompted($post_id, $user_id);
+        
+        wp_send_json_success(['message' => __('促し表示済みとしてマークしました。', 'work-notes')]);
+    }
+    
+    /**
+     * 作業ログ促し判定（厳密版・3段ガード）
+     */
+    public function should_prompt_for_worklog_strict($post_id, $user_id = null) {
+        if ($user_id === null) {
+            $user_id = get_current_user_id();
+        }
+        
+        if (!$post_id || !$user_id) {
+            return false;
+        }
+        
+        // 対象ユーザーかどうか
+        if (class_exists('OFWN_Worklog_Settings') && !OFWN_Worklog_Settings::is_target_user($user_id)) {
+            return false;
+        }
+        
+        // 対象投稿タイプかどうか
+        $post_type = get_post_type($post_id);
+        if (class_exists('OFWN_Worklog_Settings') && !OFWN_Worklog_Settings::is_target_post_type($post_type)) {
+            return false;
+        }
+        
+        // クールダウンチェック（5分間）
+        $cooldown_key = "ofwn_lock_{$post_id}_{$user_id}";
+        if (get_transient($cooldown_key)) {
+            return false;
+        }
+        
+        // リビジョン差分チェック
+        $current_revision = $this->get_current_revision_id($post_id);
+        $last_logged_revision = get_user_meta($user_id, "ofwn_last_log_rev_{$post_id}", true);
+        
+        if ($current_revision && $current_revision == $last_logged_revision) {
+            return false;
+        }
+        
+        // 内容ハッシュ差分チェック
+        $current_hash = $this->get_post_content_hash($post_id);
+        $last_logged_hash = get_user_meta($user_id, "ofwn_last_log_hash_{$post_id}", true);
+        
+        if ($current_hash && $current_hash === $last_logged_hash) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 作業ログ促し実行済みマーク
+     */
+    public function mark_worklog_prompted($post_id, $user_id = null) {
+        if ($user_id === null) {
+            $user_id = get_current_user_id();
+        }
+        
+        if (!$post_id || !$user_id) {
+            return false;
+        }
+        
+        $current_revision = $this->get_current_revision_id($post_id);
+        $current_hash = $this->get_post_content_hash($post_id);
+        
+        update_user_meta($user_id, "ofwn_last_log_rev_{$post_id}", $current_revision);
+        update_user_meta($user_id, "ofwn_last_log_hash_{$post_id}", $current_hash);
+        
+        // クールダウンセット（5分）
+        $cooldown_key = "ofwn_lock_{$post_id}_{$user_id}";
+        set_transient($cooldown_key, 1, 5 * MINUTE_IN_SECONDS);
+        
+        return true;
+    }
+    
+    /**
+     * 投稿内容ハッシュを取得
+     */
+    private function get_post_content_hash($post_id) {
+        $post = get_post($post_id);
+        if (!$post) return '';
+        $content_parts = [$post->post_title, $post->post_content, $post->post_excerpt];
+        return md5(implode('||', array_filter($content_parts)));
     }
 }
