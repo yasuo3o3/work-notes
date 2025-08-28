@@ -35,6 +35,10 @@ wp-config.php
 # htaccess
 /.htaccess
 
+
+updates/
+updates/stable.json
+updates/beta.json
 # All plugins
 #
 # Note: If you wish to whitelist plugins,

@@ -1,15 +1,15 @@
 {
   "name": "Work Notes（作業メモ）",
-  "version": "1.00",
+  "version": "1.01",
   "author": "Netservice",
   "author_profile": "https://netservice.jp/",
   "homepage": "https://netservice.jp/plugins/work-notes/",
   "requires": "6.0",
   "requires_php": "8.0",
   "tested": "6.4",
-  "last_updated": "2024-01-01",
+  "last_updated": "2025-08-28",
   "description": "クライアント指示や更新作業のメモをWP内で記録・管理するプラグイン。保存後の作業ログ促し機能付き。",
   "changelog": "= 1.00 =\n* 仮想配布ルート /updates/ を実装\n* 本番運用前セキュリティ強化とWPCS準拠対応\n* SQLインジェクション対策強化\n* REST API認証強化\n* CSRF保護完全化",
-  "download_url": "https://example.com/updates/work-notes-1.00.zip",
+  "download_url": "https://example.com/updates/work-notes-1.01.zip",
   "details_url": "https://netservice.jp/plugins/work-notes/"
 }
