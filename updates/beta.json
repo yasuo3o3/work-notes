@@ -1,0 +1,15 @@
+{
+  "name": "Work Notes（作業メモ） - Beta",
+  "version": "1.01-beta.1",
+  "author": "Netservice",
+  "author_profile": "https://netservice.jp/",
+  "homepage": "https://netservice.jp/plugins/work-notes/",
+  "requires": "6.0",
+  "requires_php": "8.0",
+  "tested": "6.4",
+  "last_updated": "2024-01-15",
+  "description": "クライアント指示や更新作業のメモをWP内で記録・管理するプラグイン。ベータ版には最新の機能と改善が含まれます。",
+  "changelog": "= 1.01-beta.1 =\n* 新機能のテスト実装\n* パフォーマンス改善\n* UI/UX 改善\n* バグ修正",
+  "download_url": "https://example.com/updates/work-notes-1.01-beta.1.zip",
+  "details_url": "https://netservice.jp/plugins/work-notes/beta/"
+}

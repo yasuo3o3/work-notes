@@ -24,6 +24,7 @@ if (is_admin() && !class_exists('WP_List_Table')) {
 // クラス読み込み
 require_once OFWN_DIR . 'includes/class-of-work-notes.php';
 require_once OFWN_DIR . 'includes/class-ofwn-list-table.php';
+require_once OFWN_DIR . 'includes/class-ofwn-updater.php';
 
 // テキストドメイン読み込み
 add_action('plugins_loaded', function () {
@@ -39,8 +40,13 @@ function work_notes_activate() {
     // - CPTリライトの反映（必要時）
     // - 初期オプションの用意
     // - capabilities 付与 など
-    if (function_exists('flush_rewrite_rules')) {
-        flush_rewrite_rules();
+    
+    // 仮想配布ルート用のリライトルール初期化フラグ
+    if (!get_option('ofwn_rewrite_flushed')) {
+        add_option('ofwn_rewrite_flushed', '1');
+        if (function_exists('flush_rewrite_rules')) {
+            flush_rewrite_rules();
+        }
     }
 }
 
@@ -56,4 +62,9 @@ function work_notes_deactivate() {
 // 起動
 add_action('plugins_loaded', function () {
     new OF_Work_Notes();
+    
+    // アップデートチェッカー初期化
+    if (is_admin()) {
+        new OFWN_Updater(__FILE__, OFWN_VER);
+    }
 });
