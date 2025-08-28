@@ -498,9 +498,9 @@ class OFWN_Worklog_Meta {
         update_user_meta($user_id, "ofwn_last_log_rev_{$post_id}", $current_revision);
         update_user_meta($user_id, "ofwn_last_log_hash_{$post_id}", $current_hash);
         
-        // クールダウンセット（5分）
+        // クールダウンセット（1分）
         $cooldown_key = "ofwn_lock_{$post_id}_{$user_id}";
-        set_transient($cooldown_key, 1, 5 * MINUTE_IN_SECONDS);
+        set_transient($cooldown_key, 1, 1 * MINUTE_IN_SECONDS);
         
         return true;
     }
