@@ -101,28 +101,31 @@ class OFWN_List_Table extends WP_List_Table {
     private function status_counts() {
         global $wpdb;
         $out = ['all' => 0, '依頼' => 0, '対応中' => 0, '完了' => 0];
+        $allowed_statuses = ['依頼', '対応中', '完了'];
+        $default_status = '依頼';
         
         // 全件数
         $all_count = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish'",
-            OF_Work_Notes::CPT
+            "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = %s AND post_status = %s",
+            OF_Work_Notes::CPT,
+            'publish'
         ));
         $out['all'] = (int)$all_count;
         
         // ステータス別件数（LEFT JOINでメタデータと結合）
         $status_counts = $wpdb->get_results($wpdb->prepare(
-            "SELECT COALESCE(pm.meta_value, '依頼') as status, COUNT(*) as count 
+            "SELECT COALESCE(pm.meta_value, %s) as status, COUNT(*) as count 
              FROM {$wpdb->posts} p 
-             LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ofwn_status'
-             WHERE p.post_type = %s AND p.post_status = 'publish'
-             GROUP BY COALESCE(pm.meta_value, '依頼')",
-            OF_Work_Notes::CPT
+             LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
+             WHERE p.post_type = %s AND p.post_status = %s
+             GROUP BY COALESCE(pm.meta_value, %s)",
+            $default_status, '_ofwn_status', OF_Work_Notes::CPT, 'publish', $default_status
         ));
         
-        // 結果をマップに設定
+        // 結果を許可リストでフィルターして設定
         foreach ($status_counts as $row) {
             $status = $row->status;
-            if (isset($out[$status])) {
+            if (in_array($status, $allowed_statuses, true)) {
                 $out[$status] = (int)$row->count;
             }
         }
@@ -157,9 +160,9 @@ class OFWN_List_Table extends WP_List_Table {
         if ($to)   $meta_query[] = ['key'=>'_ofwn_work_date','value'=>$to,  'compare'=>'<='];
 
         $orderby_arg = 'date';
-        if ($orderby === 'ofwn_date') {
+        if ('ofwn_date' === $orderby) {
             $orderby_arg = 'meta_value';
-        } elseif ($orderby === 'title') {
+        } elseif ('title' === $orderby) {
             $orderby_arg = 'title';
         }
 
@@ -172,7 +175,7 @@ class OFWN_List_Table extends WP_List_Table {
             'orderby'        => $orderby_arg,
             'order'          => $order,
         ];
-        if ($orderby === 'ofwn_date') {
+        if ('ofwn_date' === $orderby) {
             $args['meta_key'] = '_ofwn_work_date';
         }
 
@@ -213,14 +216,14 @@ class OFWN_List_Table extends WP_List_Table {
             case 'title':
                 return '<strong><a href="'.esc_url($item['edit_link']).'">'.esc_html($item['title']).'</a></strong>';
             case 'ofwn_status':
-                $cls = $item['status']==='完了' ? 'done' : '';
+                $cls = '完了' === $item['status'] ? 'done' : '';
                 return '<span class="ofwn-badge ' . esc_attr($cls) . '">' . esc_html($item['status']) . '</span>';
             case 'ofwn_requester':
                 return esc_html($item['requester'] ?: '—');
             case 'ofwn_worker':
                 return esc_html($item['worker'] ?: '—');
             case 'ofwn_target':
-                if ($item['target_type']==='post' && $item['target_id']) {
+                if ('post' === $item['target_type'] && $item['target_id']) {
                     $link = get_edit_post_link((int)$item['target_id']);
                     $title = get_the_title((int)$item['target_id']);
                     return '<a href="'.esc_url($link).'">'.esc_html($title ?: ('ID:'.$item['target_id'])).'</a>';

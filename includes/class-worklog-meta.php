@@ -129,6 +129,7 @@ class OFWN_Worklog_Meta {
      * メタデータの認証コールバック
      */
     public function meta_auth_callback($allowed, $meta_key, $post_id, $user_id, $cap, $caps) {
+        if (!$allowed) return false;
         return current_user_can('edit_post', $post_id);
     }
     

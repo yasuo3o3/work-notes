@@ -86,7 +86,7 @@ class OF_Work_Notes {
         // メイン条件: 作業メモのpost_typeまたは関連ページ
         $is_work_notes_screen = false;
         
-        if ($screen && $screen->post_type === self::CPT) {
+        if ($screen && self::CPT === $screen->post_type) {
             $is_work_notes_screen = true;
         }
         
@@ -290,8 +290,8 @@ class OF_Work_Notes {
     }
 
     public function save_note_meta($post_id) {
-        // デバッグログ開始
-        $debug_log = defined('WP_DEBUG_LOG') && WP_DEBUG_LOG;
+        // デバッグログ開始（本番では無効化）
+        $debug_log = defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG;
         if ($debug_log) {
             error_log('[OFWN] save_note_meta called for post_id: ' . $post_id);
         }
@@ -320,7 +320,7 @@ class OF_Work_Notes {
         }
         
         // 投稿タイプチェック
-        if (get_post_type($post_id) !== self::CPT) {
+        if (self::CPT !== get_post_type($post_id)) {
             if ($debug_log) error_log('[OFWN] Wrong post type: ' . get_post_type($post_id));
             return;
         }
@@ -417,7 +417,7 @@ class OF_Work_Notes {
             $type  = $this->get_meta($post_id, '_ofwn_target_type');
             $id    = $this->get_meta($post_id, '_ofwn_target_id');
             $label = $this->get_meta($post_id, '_ofwn_target_label');
-            if ($type === 'post' && $id) {
+            if ('post' === $type && $id) {
                 $link = get_edit_post_link((int)$id);
                 $title = get_the_title((int)$id);
                 echo '<a href="'.esc_url($link).'">'.esc_html($title ?: ('ID:'.$id)).'</a>';
@@ -427,7 +427,7 @@ class OF_Work_Notes {
         }
         if ($col === 'ofwn_status') {
             $s = $this->get_meta($post_id, '_ofwn_status','依頼');
-            $cls = $s==='完了' ? 'done' : '';
+            $cls = '完了' === $s ? 'done' : '';
             echo '<span class="ofwn-badge ' . esc_attr($cls) . '">' . esc_html($s) . '</span>';
         }
     }
@@ -508,16 +508,25 @@ class OF_Work_Notes {
         if (!current_user_can('edit_post', $post->ID)) return;
         wp_nonce_field(self::NONCE, self::NONCE);
 
-        $notes = get_posts([
-            'post_type' => self::CPT,
-            'posts_per_page' => 20,
-            'meta_query' => [
-                ['key' => '_ofwn_target_type','value' => 'post'],
-                ['key' => '_ofwn_target_id','value' => (string)$post->ID],
-            ],
-            'orderby' => 'date',
-            'order' => 'DESC',
-        ]);
+        $cache_key = 'ofwn_notes_' . $post->ID;
+        $notes = wp_cache_get($cache_key, 'work_notes');
+        if (false === $notes) {
+            $query = new WP_Query([
+                'post_type' => self::CPT,
+                'posts_per_page' => 20,
+                'meta_query' => [
+                    'relation' => 'AND',
+                    ['key' => '_ofwn_target_type', 'value' => 'post', 'compare' => '='],
+                    ['key' => '_ofwn_target_id', 'value' => (string)$post->ID, 'compare' => '='],
+                ],
+                'orderby' => 'date',
+                'order' => 'DESC',
+                'no_found_rows' => true,
+                'update_post_meta_cache' => false,
+            ]);
+            $notes = $query->posts;
+            wp_cache_set($cache_key, $notes, 'work_notes', 5 * MINUTE_IN_SECONDS);
+        }
 
         echo '<div class="ofwn-list">';
         if ($notes) {
@@ -571,7 +580,12 @@ class OF_Work_Notes {
     }
 
     public function capture_quick_note_from_parent($post_id, $post) {
-        if (!isset($_POST[self::NONCE]) || !wp_verify_nonce($_POST[self::NONCE], self::NONCE)) return;
+        if (!isset($_POST[self::NONCE]) || !wp_verify_nonce(sanitize_key($_POST[self::NONCE]), self::NONCE)) {
+            return;
+        }
+        if (!wp_doing_ajax() && (!isset($_POST['action']) || 'editpost' !== $_POST['action'])) {
+            return;
+        }
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
         if (!current_user_can('edit_post', $post_id)) return;
         if (!in_array($post->post_type, get_post_types(['public'=>true], 'names'))) return;
@@ -683,24 +697,24 @@ class OF_Work_Notes {
         }
         
         // 早期リターン：投稿編集画面のみ
-        if (!in_array($hook, ['post.php', 'post-new.php'])) {
+        if (!in_array($hook, ['post.php', 'post-new.php'], true)) {
             return;
         }
         
         // スクリーンチェックを最初に実行
         $screen = get_current_screen();
-        if (!$screen || !in_array($screen->post_type, ['post', 'page'])) {
+        if (!$screen || !in_array($screen->post_type, ['post', 'page'], true)) {
             return;
         }
         
         // モード管理による分岐
         $mode = get_option('ofwn_worklog_mode', 'manual');
         
-        if ($mode === 'disabled') {
+        if ('disabled' === $mode) {
             return;
         }
         
-        if ($mode === 'manual') {
+        if ('manual' === $mode) {
             // 厳密チェック
             if (!class_exists('OFWN_Worklog_Settings')) {
                 return;

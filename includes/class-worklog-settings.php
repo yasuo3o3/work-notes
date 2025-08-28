@@ -304,9 +304,9 @@ class OFWN_Worklog_Settings {
             wp_die(__('権限がありません。', 'work-notes'));
         }
         
-        $search = sanitize_text_field($_POST['search'] ?? '');
-        if (empty($search)) {
-            wp_send_json_error(['message' => __('検索語句が空です。', 'work-notes')]);
+        $search = isset($_POST['search']) ? sanitize_text_field(wp_unslash($_POST['search'])) : '';
+        if (empty($search) || strlen($search) < 2) {
+            wp_send_json_error(['message' => __('検索語句は2文字以上で入力してください。', 'work-notes')]);
         }
         
         $users = get_users([
