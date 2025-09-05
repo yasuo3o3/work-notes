@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-version: ['7.4', '8.0', '8.1', '8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+          
+      - name: Syntax check (PHP)
+        run: |
+          find . -name "*.php" -not -path "./vendor/*" -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+  text-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Markdown & basic checks
+        run: |
+          test -f LICENSE && echo "LICENSE found" || (echo "LICENSE missing" && exit 1)
+          test -f CHANGELOG.md && echo "CHANGELOG found" || (echo "CHANGELOG missing" && exit 1)
+          
+      - name: Check file encoding
+        run: |
+          # UTF-8エンコーディングチェック
+          find . -name "*.php" -not -path "./vendor/*" -print0 | \
+            xargs -0 file --mime-encoding | grep -v "utf-8" && exit 1 || echo "All PHP files are UTF-8"
+            
+      - name: Check line endings
+        run: |
+          # LF改行コードチェック（CRLFが含まれていないか）
+          find . -name "*.php" -not -path "./vendor/*" -exec grep -l $'\r' {} \; | \
+            while read file; do echo "CRLF found in: $file"; done | \
+            { read line; if [ -n "$line" ]; then echo "$line"; exit 1; fi; }
+
+  wordpress-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          
+      - name: Check WordPress coding standards (basic)
+        run: |
+          # WordPress関数・フック使用の基本チェック
+          echo "Checking for basic WordPress compatibility..."
+          
+          # ABSPATH チェック
+          grep -r "defined.*ABSPATH" --include="*.php" . || \
+            (echo "Warning: ABSPATH check might be missing in some files" && exit 0)
+            
+          # wp_enqueue チェック（推奨）
+          if find . -name "*.php" -not -path "./vendor/*" -exec grep -l "wp_enqueue" {} \;; then
+            echo "Good: Using wp_enqueue functions"
+          fi
