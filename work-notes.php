@@ -5,7 +5,7 @@
  * Version:           1.01
  * Author:            Netservice
  * Author URI:        https://netservice.jp/
- * License:           GPLv2 or later
+ * License:           GPL-2.0-or-later
  * Text Domain:       work-notes
  * Domain Path:       /languages
  */

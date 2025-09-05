@@ -5,7 +5,7 @@ Requires at least: 6.0
 Tested up to: 6.4
 Stable tag: 1.00
 Requires PHP: 8.0
-License: GPLv2 or later
+License: GPL-2.0-or-later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 クライアント指示や更新作業のメモをWP内で記録・管理するプラグイン。保存後の作業ログ促し機能付き。
