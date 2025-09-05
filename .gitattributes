@@ -13,6 +13,7 @@
 /.gitattributes export-ignore
 /.gitignore export-ignore
 /composer.json export-ignore
+/composer.lock export-ignore
 /phpcs.xml export-ignore
 /update-changelog.sh export-ignore
 
