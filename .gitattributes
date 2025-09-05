@@ -1,12 +1,20 @@
+# Git関連ディレクトリ
 /.git export-ignore
+/.github export-ignore
 /.history export-ignore
+
+# 開発・テスト関連
+/docs export-ignore
+/tests export-ignore
 /updates export-ignore
 
+# 設定ファイル
+/.editorconfig export-ignore
 /.gitattributes export-ignore
 /.gitignore export-ignore
-/CHANGELOG.md export-ignore
 /composer.json export-ignore
 /phpcs.xml export-ignore
-/README.md export-ignore
-/UNINSTALL-CHECKLIST.md export-ignore
 /update-changelog.sh export-ignore
+
+# ドキュメント（Markdown）
+*.md export-ignore
