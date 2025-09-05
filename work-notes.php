@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Work Notes（作業メモ）
  * Description:       クライアント指示や更新作業のメモをWP内で記録。投稿や固定ページに紐づけ、一覧管理できます。依頼元/担当者のマスター管理＆セレクト、管理画面の「作業一覧」付き。
- * Version:           1.01
+ * Version:           1.0.2
  * Author:            Netservice
  * Author URI:        https://netservice.jp/
  * License:           GPL-2.0-or-later
@@ -12,7 +12,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('OFWN_VER', '1.00');
+define('OFWN_VER', '1.0.2');
 define('OFWN_DIR', plugin_dir_path(__FILE__));
 define('OFWN_URL', plugin_dir_url(__FILE__));
 

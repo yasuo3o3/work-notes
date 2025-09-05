@@ -4,6 +4,10 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.0.2] - 2025-01-26
+### Changed
+- バージョン番号を1.0.2に統一（Semantic Versioningに完全準拠）
+
 ## [1.01] - 2025-01-26
 ### Fixed
 - ライセンス表記の統一（全ファイルでGPL-2.0-or-laterに統一）
