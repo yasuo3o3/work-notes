@@ -56,6 +56,92 @@
 
 ## 🔄 開発者向け
 
+### 開発環境セットアップ
+
+#### 必要な環境
+- PHP 7.4 以上（推奨: PHP 8.1+）
+- WordPress 6.0 以上
+- Composer（依存関係管理用）
+- Git（ソース管理用）
+
+#### セットアップ手順
+
+1. **リポジトリをクローン**
+```bash
+git clone [repository-url] work-notes
+cd work-notes
+```
+
+2. **開発依存関係をインストール**
+```bash
+# Composer 依存関係のインストール
+composer install
+
+# composer.lock が未生成の場合
+composer update
+```
+
+3. **WordPress環境への配置**
+```bash
+# WordPressのpluginsディレクトリにシンボリックリンクを作成（推奨）
+ln -s $(pwd) /path/to/wordpress/wp-content/plugins/work-notes
+
+# または直接ファイルをコピー
+cp -r . /path/to/wordpress/wp-content/plugins/work-notes/
+```
+
+4. **WordPressでプラグインを有効化**
+- WordPress管理画面 > プラグイン > Work Notes を有効化
+
+#### 開発ワークフロー
+
+1. **コード品質チェック**
+```bash
+# PHP構文チェック
+find . -name "*.php" -not -path "./vendor/*" -print0 | xargs -0 -n1 -P4 php -l
+
+# WordPress コーディング標準チェック（PHPCS設定済み）
+vendor/bin/phpcs
+
+# 自動修正（可能な場合）
+vendor/bin/phpcbf
+```
+
+2. **GitHubでのCI確認**
+- プッシュ・プルリクエスト時に自動で以下が実行されます:
+  - PHP 7.4-8.3 での構文チェック
+  - ファイルエンコーディング・改行コードチェック
+  - WordPress基本互換性チェック
+
+3. **翻訳ファイル更新**
+```bash
+# .pot ファイルの更新（WP-CLI使用）
+wp i18n make-pot . languages/work-notes.pot
+```
+
+#### 配布用ZIP作成
+
+```bash
+# .gitattributes の export-ignore 設定に基づいて配布用ZIPを作成
+git archive --format=zip --prefix=work-notes/ HEAD > work-notes.zip
+```
+
+このコマンドにより、開発専用ファイル（.github/, *.md, composer.json等）を除外した配布用ZIPが生成されます。
+
+#### デバッグ設定
+
+開発時は wp-config.php に以下を追加することを推奨：
+
+```php
+// デバッグモード有効化
+define('WP_DEBUG', true);
+define('WP_DEBUG_LOG', true);
+define('WP_DEBUG_DISPLAY', false);
+
+// スクリプト・スタイルの圧縮無効化
+define('SCRIPT_DEBUG', true);
+```
+
 ### Changelog自動更新
 コミットメッセージからCHANGELOG.mdを自動更新するスクリプトが利用できます。
 
