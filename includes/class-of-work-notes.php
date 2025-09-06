@@ -790,6 +790,14 @@ class OF_Work_Notes {
             true
         );
         
+        // Gutenbergサイドバー専用CSS
+        wp_enqueue_style(
+            'ofwn-gutenberg-sidebar-css',
+            OFWN_URL . 'assets/css/gutenberg-sidebar.css',
+            [],
+            filemtime(OFWN_DIR . 'assets/css/gutenberg-sidebar.css')
+        );
+        
         // 依頼元・担当者のオプションを取得してJavaScriptに渡す
         $requesters = get_option('ofwn_requesters', []);
         $workers = get_option('ofwn_workers', $this->default_workers());

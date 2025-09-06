@@ -1,0 +1,74 @@
+/**
+ * 作業メモ Gutenberg サイドバー（PluginPostStatusInfo）用スタイル
+ */
+
+/* 作業メモ PostStatusInfo エリア全体 */
+.work-notes-post-status-info {
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+}
+
+/* 作業メモ ヘッダーボタン */
+.work-notes-toggle-button {
+    width: 100%;
+    text-align: left;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 8px 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #1e1e1e;
+}
+
+.work-notes-toggle-button:hover {
+    color: #0073aa;
+}
+
+.work-notes-toggle-button:focus {
+    outline: 1px solid #0073aa;
+    outline-offset: 2px;
+}
+
+/* PanelRow による各フィールドのスタイル */
+.work-notes-post-status-info .components-panel__row {
+    margin-bottom: 12px;
+}
+
+.work-notes-post-status-info .components-panel__row:last-child {
+    margin-bottom: 0;
+}
+
+/* フォームコントロールのスタイル調整 */
+.work-notes-post-status-info .components-select-control,
+.work-notes-post-status-info .components-text-control {
+    width: 100%;
+}
+
+.work-notes-post-status-info .components-base-control__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #1e1e1e;
+    margin-bottom: 4px;
+}
+
+.work-notes-post-status-info .components-select-control__input,
+.work-notes-post-status-info .components-text-control__input {
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 2px;
+}
+
+.work-notes-post-status-info .components-select-control__input:focus,
+.work-notes-post-status-info .components-text-control__input:focus {
+    border-color: #0073aa;
+    box-shadow: 0 0 0 1px #0073aa;
+}
+
+/* 折りたたみ状態でのアニメーション */
+.work-notes-post-status-info .components-panel__row {
+    transition: all 0.2s ease-in-out;
+}
