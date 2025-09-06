@@ -26,9 +26,8 @@ class OF_Work_Notes {
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
         add_action('current_screen', [$this, 'maybe_prefill_target_meta']);
 
-        // 設定ページ
-        add_action('admin_menu', [$this, 'add_settings_page']);
-        add_action('admin_init', [$this, 'register_settings']);
+        // 旧設定ページのリダイレクト処理
+        add_action('admin_init', [$this, 'handle_legacy_settings_redirect']);
 
         // 作業一覧ページ
         add_action('admin_menu', [$this, 'add_list_page']);
@@ -141,15 +140,15 @@ class OF_Work_Notes {
 
     /* ===== 設定（マスター管理） ===== */
 
-    public function add_settings_page() {
-        add_submenu_page(
-            'edit.php?post_type=' . self::CPT,
-            __('作業メモ設定', 'work-notes'),
-            __('設定', 'work-notes'),
-            'manage_options',
-            'ofwn-settings',
-            [$this, 'render_settings_page']
-        );
+    /**
+     * 旧設定ページへのアクセスを作業ログ設定にリダイレクト
+     */
+    public function handle_legacy_settings_redirect() {
+        if (isset($_GET['post_type']) && $_GET['post_type'] === self::CPT &&
+            isset($_GET['page']) && $_GET['page'] === 'ofwn-settings') {
+            wp_redirect(admin_url('edit.php?post_type=' . self::CPT . '&page=ofwn-worklog-settings'));
+            exit;
+        }
     }
 
     public function register_settings() {
