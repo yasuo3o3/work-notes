@@ -811,13 +811,13 @@ class OF_Work_Notes {
             'ofwn-gutenberg-sidebar',
             OFWN_URL . 'assets/js/gutenberg-sidebar.js',
             [
-                'wp-plugins', 
-                'wp-edit-post', 
-                'wp-element', 
-                'wp-components', 
-                'wp-data', 
-                'wp-core-data',
-                'wp-i18n'
+                'wp-plugins',     // registerPlugin
+                'wp-edit-post',   // PluginPostStatusInfo
+                'wp-element',     // createElement, Fragment, useState
+                'wp-components',  // TextControl, SelectControl, PanelRow, Button
+                'wp-data',        // useSelect, useDispatch
+                'wp-core-data',   // useEntityProp
+                'wp-i18n'         // __
             ],
             filemtime(OFWN_DIR . 'assets/js/gutenberg-sidebar.js'),
             true

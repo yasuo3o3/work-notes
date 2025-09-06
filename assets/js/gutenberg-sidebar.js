@@ -5,6 +5,12 @@
 (function() {
     'use strict';
     
+    // デバッグ用：WordPress グローバルオブジェクトの確認
+    console.log('Work Notes Debug: wp object available:', typeof wp !== 'undefined');
+    console.log('Work Notes Debug: wp.element:', typeof wp.element !== 'undefined');
+    console.log('Work Notes Debug: wp.editPost:', typeof wp.editPost !== 'undefined');
+    console.log('Work Notes Debug: wp.plugins:', typeof wp.plugins !== 'undefined');
+    
     // WordPress コンポーネントを取得
     const { createElement: e, Fragment } = wp.element;
     const { PluginPostStatusInfo } = wp.editPost;
@@ -85,6 +91,7 @@
             
             // 折りたたみ可能なコンテンツ
             isExpanded && e(Fragment, {},
+                e(PanelRow, {},
                     e(SelectControl, {
                         label: __('対象タイプ', 'work-notes'),
                         value: currentTargetType,
