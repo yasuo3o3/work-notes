@@ -25,6 +25,7 @@ class OF_Work_Notes {
         add_action('admin_bar_menu', [$this, 'admin_bar_quick_add'], 80);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
         add_action('current_screen', [$this, 'maybe_prefill_target_meta']);
+        add_action('wp_ajax_ofwn_get_sidebar_data', [$this, 'ajax_get_sidebar_data']);
 
         // 旧設定ページのリダイレクト処理
         add_action('admin_init', [$this, 'handle_legacy_settings_redirect']);
@@ -49,6 +50,11 @@ class OF_Work_Notes {
             require_once OFWN_DIR . 'includes/class-worklog-settings.php';
         }
         new OFWN_Worklog_Settings();
+        
+        // Gutenberg サイドバー用アセット読み込み
+        if (is_admin()) {
+            add_action('enqueue_block_editor_assets', [$this, 'enqueue_gutenberg_sidebar_assets']);
+        }
     }
 
     /* ===== 基本 ===== */
@@ -753,7 +759,86 @@ class OF_Work_Notes {
         echo '</form></div>';
     }
     
+    /**
+     * Gutenberg サイドバー用アセットを読み込み
+     */
+    public function enqueue_gutenberg_sidebar_assets() {
+        // 作業メモ投稿タイプの編集画面のみで読み込み
+        $screen = get_current_screen();
+        if (!$screen || $screen->post_type !== self::CPT) {
+            return;
+        }
+        
+        // Gutenberg エディタでない場合はスキップ
+        if (!$this->is_gutenberg_editor()) {
+            return;
+        }
+        
+        wp_enqueue_script(
+            'ofwn-gutenberg-sidebar',
+            OFWN_URL . 'assets/js/gutenberg-sidebar.js',
+            [
+                'wp-plugins', 
+                'wp-edit-post', 
+                'wp-element', 
+                'wp-components', 
+                'wp-data', 
+                'wp-core-data',
+                'wp-i18n'
+            ],
+            filemtime(OFWN_DIR . 'assets/js/gutenberg-sidebar.js'),
+            true
+        );
+        
+        // 依頼元・担当者のオプションを取得してJavaScriptに渡す
+        $requesters = get_option('ofwn_requesters', []);
+        $workers = get_option('ofwn_workers', $this->default_workers());
+        
+        wp_localize_script('ofwn-gutenberg-sidebar', 'ofwnGutenbergData', [
+            'requesters' => $requesters,
+            'workers' => $workers,
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('ofwn_sidebar_nonce')
+        ]);
+    }
     
+    /**
+     * Gutenberg エディタかどうかを判定
+     */
+    private function is_gutenberg_editor() {
+        // WordPress 5.0+ のブロックエディタチェック
+        if (function_exists('use_block_editor_for_post')) {
+            global $post;
+            return $post && use_block_editor_for_post($post);
+        }
+        
+        // 旧バージョン対応
+        if (function_exists('is_gutenberg_page')) {
+            return is_gutenberg_page();
+        }
+        
+        return false;
+    }
+    
+    /**
+     * サイドバーデータ取得用AJAX
+     */
+    public function ajax_get_sidebar_data() {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_sidebar_nonce')) {
+            wp_send_json_error(['message' => 'Invalid nonce']);
+        }
+        
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Insufficient permissions']);
+        }
+        
+        $data = [
+            'requesters' => get_option('ofwn_requesters', []),
+            'workers' => get_option('ofwn_workers', $this->default_workers())
+        ];
+        
+        wp_send_json_success($data);
+    }
     
     /* ===== 仮想配布ルート ===== */
     

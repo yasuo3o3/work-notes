@@ -1,0 +1,187 @@
+/**
+ * 作業メモ Gutenberg サイドバーパネル
+ * PluginDocumentSettingPanel を使用して右サイドバーに作業メモ入力フォームを表示
+ */
+(function() {
+    'use strict';
+    
+    // WordPress コンポーネントを取得
+    const { createElement: e, Fragment } = wp.element;
+    const { PluginDocumentSettingPanel } = wp.editPost;
+    const { useSelect, useDispatch } = wp.data;
+    const { TextControl, SelectControl, TextareaControl } = wp.components;
+    const { useEntityProp } = wp.coreData;
+    const { registerPlugin } = wp.plugins;
+    const { __ } = wp.i18n;
+    
+    // 作業メモサイドバーパネルコンポーネント
+    function WorkNotesPanel() {
+        // 投稿タイプとIDを取得
+        const postType = useSelect(select => 
+            select('core/editor').getCurrentPostType(), []
+        );
+        const postId = useSelect(select => 
+            select('core/editor').getCurrentPostId(), []
+        );
+        
+        // 作業メモ投稿タイプでない場合は表示しない
+        if (postType !== 'of_work_note') {
+            return null;
+        }
+        
+        // メタフィールドのフック（個別にフック）
+        const [meta, setMeta] = useEntityProp('postType', postType, 'meta', postId);
+        
+        // 現在の値を取得（未定義の場合はデフォルト値を設定）
+        const currentTargetType = meta?._ofwn_target_type || '';
+        const currentTargetId = meta?._ofwn_target_id || '';
+        const currentTargetLabel = meta?._ofwn_target_label || '';
+        const currentRequester = meta?._ofwn_requester || '';
+        const currentWorker = meta?._ofwn_worker || '';
+        const currentStatus = meta?._ofwn_status || '依頼';
+        const currentWorkDate = meta?._ofwn_work_date || new Date().toISOString().split('T')[0];
+        
+        // メタ更新ヘルパー関数
+        const updateMeta = function(key, value) {
+            setMeta({ ...meta, [key]: value });
+        };
+        
+        // 依頼元・担当者のオプション（サーバーから取得）
+        const requesterOptions = window.ofwnGutenbergData?.requesters || [];
+        const workerOptions = window.ofwnGutenbergData?.workers || [];
+        
+        // セレクトオプションを構築
+        const requesterSelectOptions = [
+            { label: '（選択）', value: '' },
+            ...requesterOptions.map(option => ({ label: option, value: option })),
+            { label: 'その他（手入力）', value: '__custom__' }
+        ];
+        
+        const workerSelectOptions = [
+            { label: '（選択）', value: '' },
+            ...workerOptions.map(option => ({ label: option, value: option })),
+            { label: 'その他（手入力）', value: '__custom__' }
+        ];
+        
+        return e(PluginDocumentSettingPanel, {
+            name: 'work-notes-panel',
+            title: __('作業メモ属性', 'work-notes'),
+            className: 'work-notes-sidebar-panel'
+        }, 
+            // 対象タイプ
+            e(SelectControl, {
+                label: __('対象タイプ', 'work-notes'),
+                value: currentTargetType,
+                options: [
+                    { label: __('（任意）', 'work-notes'), value: '' },
+                    { label: __('投稿/固定ページ', 'work-notes'), value: 'post' },
+                    { label: __('サイト全体/設定/テーマ', 'work-notes'), value: 'site' },
+                    { label: __('その他', 'work-notes'), value: 'other' }
+                ],
+                onChange: function(value) {
+                    updateMeta('_ofwn_target_type', value);
+                }
+            }),
+            
+            // 対象ID
+            e(TextControl, {
+                label: __('対象ID（投稿IDなど）', 'work-notes'),
+                value: currentTargetId,
+                onChange: function(value) {
+                    updateMeta('_ofwn_target_id', value);
+                }
+            }),
+            
+            // 対象ラベル
+            e(TextControl, {
+                label: __('対象ラベル（例：トップページ、パーマリンク設定 等）', 'work-notes'),
+                value: currentTargetLabel,
+                onChange: function(value) {
+                    updateMeta('_ofwn_target_label', value);
+                }
+            }),
+            
+            // 依頼元
+            e(SelectControl, {
+                label: __('依頼元', 'work-notes'),
+                value: requesterSelectOptions.find(opt => opt.value === currentRequester) ? currentRequester : '__custom__',
+                options: requesterSelectOptions,
+                onChange: function(value) {
+                    if (value === '__custom__') {
+                        // カスタム入力の場合は空文字を設定（TextControlで入力してもらう）
+                        updateMeta('_ofwn_requester', '');
+                    } else {
+                        updateMeta('_ofwn_requester', value);
+                    }
+                }
+            }),
+            
+            // 依頼元カスタム入力（セレクトで__custom__が選択されている場合のみ表示）
+            (requesterSelectOptions.find(opt => opt.value === currentRequester) ? null : 
+                e(TextControl, {
+                    label: __('依頼元（手入力）', 'work-notes'),
+                    value: currentRequester,
+                    onChange: function(value) {
+                        updateMeta('_ofwn_requester', value);
+                    }
+                })
+            ),
+            
+            // 担当者
+            e(SelectControl, {
+                label: __('担当者', 'work-notes'),
+                value: workerSelectOptions.find(opt => opt.value === currentWorker) ? currentWorker : '__custom__',
+                options: workerSelectOptions,
+                onChange: function(value) {
+                    if (value === '__custom__') {
+                        updateMeta('_ofwn_worker', '');
+                    } else {
+                        updateMeta('_ofwn_worker', value);
+                    }
+                }
+            }),
+            
+            // 担当者カスタム入力
+            (workerSelectOptions.find(opt => opt.value === currentWorker) ? null : 
+                e(TextControl, {
+                    label: __('担当者（手入力）', 'work-notes'),
+                    value: currentWorker,
+                    onChange: function(value) {
+                        updateMeta('_ofwn_worker', value);
+                    }
+                })
+            ),
+            
+            // ステータス
+            e(SelectControl, {
+                label: __('ステータス', 'work-notes'),
+                value: currentStatus,
+                options: [
+                    { label: __('依頼', 'work-notes'), value: '依頼' },
+                    { label: __('対応中', 'work-notes'), value: '対応中' },
+                    { label: __('完了', 'work-notes'), value: '完了' }
+                ],
+                onChange: function(value) {
+                    updateMeta('_ofwn_status', value);
+                }
+            }),
+            
+            // 実施日
+            e(TextControl, {
+                label: __('実施日', 'work-notes'),
+                type: 'date',
+                value: currentWorkDate,
+                onChange: function(value) {
+                    updateMeta('_ofwn_work_date', value);
+                }
+            })
+        );
+    }
+    
+    // プラグイン登録
+    registerPlugin('work-notes-sidebar', {
+        render: WorkNotesPanel,
+        icon: 'clipboard'
+    });
+    
+})();
