@@ -77,26 +77,24 @@
         return e(PluginPostStatusInfo, {
             className: 'work-notes-post-status-info'
         }, 
-            // タイトル行（クリックで展開・折りたたみ）
+            // 単一ラッパー（PluginPostStatusInfoの唯一の直下子要素）
             e('div', {
-                className: 'work-notes-header'
-            }, 
+                className: 'work-notes-container'
+            },
+                // タイトル行（クリックで展開・折りたたみ）
                 e(Button, {
                     variant: 'tertiary',
                     onClick: () => setIsExpanded(!isExpanded),
                     className: 'work-notes-toggle-button',
                     'aria-expanded': isExpanded
-                }, __('作業メモ属性', 'work-notes') + (isExpanded ? ' ▲' : ' ▼'))
-            ),
-            
-            // 折りたたみ可能なコンテンツ
-            isExpanded && e(Fragment, {},
-                // 対象タイプ
-                e(BaseControl, {
-                    className: 'work-notes-field'
-                },
+                }, __('作業メモ属性', 'work-notes') + (isExpanded ? ' ▲' : ' ▼')),
+                
+                // 折りたたみ可能なコンテンツ
+                isExpanded && e(Fragment, {},
+                    // 対象タイプ
                     e(SelectControl, {
                         label: __('対象タイプ', 'work-notes'),
+                        className: 'work-notes-field',
                         value: currentTargetType,
                         options: [
                             { label: __('（任意）', 'work-notes'), value: '' },
@@ -107,75 +105,58 @@
                         onChange: function(value) {
                             updateMeta('_ofwn_target_type', value);
                         }
-                    })
-                ),
-                
-                // 対象ID
-                e(BaseControl, {
-                    className: 'work-notes-field'
-                },
+                    }),
+                    
+                    // 対象ID
                     e(TextControl, {
                         label: __('対象ID（投稿IDなど）', 'work-notes'),
+                        className: 'work-notes-field',
                         value: currentTargetId,
                         onChange: function(value) {
                             updateMeta('_ofwn_target_id', value);
                         }
-                    })
-                ),
-                
-                // 対象ラベル
-                e(BaseControl, {
-                    className: 'work-notes-field'
-                },
+                    }),
+                    
+                    // 対象ラベル
                     e(TextControl, {
                         label: __('対象ラベル（例：トップページ、パーマリンク設定 等）', 'work-notes'),
+                        className: 'work-notes-field',
                         value: currentTargetLabel,
                         onChange: function(value) {
                             updateMeta('_ofwn_target_label', value);
                         }
-                    })
-                ),
-                
-                // 依頼元
-                e(BaseControl, {
-                    className: 'work-notes-field'
-                },
+                    }),
+                    
+                    // 依頼元
                     e(SelectControl, {
                         label: __('依頼元', 'work-notes'),
+                        className: 'work-notes-field',
                         value: requesterSelectOptions.find(opt => opt.value === currentRequester) ? currentRequester : '__custom__',
                         options: requesterSelectOptions,
                         onChange: function(value) {
                             if (value === '__custom__') {
-                                // カスタム入力の場合は空文字を設定（TextControlで入力してもらう）
                                 updateMeta('_ofwn_requester', '');
                             } else {
                                 updateMeta('_ofwn_requester', value);
                             }
                         }
-                    })
-                ),
-                
-                // 依頼元カスタム入力（セレクトで__custom__が選択されている場合のみ表示）
-                (requesterSelectOptions.find(opt => opt.value === currentRequester) ? null :
-                    e(BaseControl, {
-                        className: 'work-notes-field'
-                    },
-                        e(TextControl, {
-                            label: __('依頼元（手入力）', 'work-notes'),
-                            value: currentRequester,
-                            onChange: function(value) {
-                                updateMeta('_ofwn_requester', value);
-                            }
-                        })
-                    )
-                ),
-                
-                // 担当者
-                e(BaseControl, {
-                    className: 'work-notes-field'
-                },
+                    }),
+                    
+                    // 依頼元カスタム入力（セレクトで__custom__が選択されている場合のみ表示）
+                    !requesterSelectOptions.find(opt => opt.value === currentRequester) &&
+                    e(TextControl, {
+                        label: __('依頼元（手入力）', 'work-notes'),
+                        className: 'work-notes-field',
+                        value: currentRequester,
+                        onChange: function(value) {
+                            updateMeta('_ofwn_requester', value);
+                        }
+                    }),
+                    
+                    // 担当者
                     e(SelectControl, {
                         label: __('担当者', 'work-notes'),
+                        className: 'work-notes-field',
                         value: workerSelectOptions.find(opt => opt.value === currentWorker) ? currentWorker : '__custom__',
                         options: workerSelectOptions,
                         onChange: function(value) {
@@ -185,30 +166,23 @@
                                 updateMeta('_ofwn_worker', value);
                             }
                         }
-                    })
-                ),
-                
-                // 担当者カスタム入力
-                (workerSelectOptions.find(opt => opt.value === currentWorker) ? null :
-                    e(BaseControl, {
-                        className: 'work-notes-field'
-                    },
-                        e(TextControl, {
-                            label: __('担当者（手入力）', 'work-notes'),
-                            value: currentWorker,
-                            onChange: function(value) {
-                                updateMeta('_ofwn_worker', value);
-                            }
-                        })
-                    )
-                ),
-                
-                // ステータス
-                e(BaseControl, {
-                    className: 'work-notes-field'
-                },
+                    }),
+                    
+                    // 担当者カスタム入力
+                    !workerSelectOptions.find(opt => opt.value === currentWorker) &&
+                    e(TextControl, {
+                        label: __('担当者（手入力）', 'work-notes'),
+                        className: 'work-notes-field',
+                        value: currentWorker,
+                        onChange: function(value) {
+                            updateMeta('_ofwn_worker', value);
+                        }
+                    }),
+                    
+                    // ステータス
                     e(SelectControl, {
                         label: __('ステータス', 'work-notes'),
+                        className: 'work-notes-field',
                         value: currentStatus,
                         options: [
                             { label: __('依頼', 'work-notes'), value: '依頼' },
@@ -218,15 +192,12 @@
                         onChange: function(value) {
                             updateMeta('_ofwn_status', value);
                         }
-                    })
-                ),
-                
-                // 実施日
-                e(BaseControl, {
-                    className: 'work-notes-field'
-                },
+                    }),
+                    
+                    // 実施日
                     e(TextControl, {
                         label: __('実施日', 'work-notes'),
+                        className: 'work-notes-field',
                         type: 'date',
                         value: currentWorkDate,
                         onChange: function(value) {

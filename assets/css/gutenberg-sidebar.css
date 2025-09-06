@@ -9,6 +9,12 @@
     margin-bottom: 12px;
 }
 
+/* 単一ラッパー（縦並び強制） */
+.work-notes-container {
+    display: flex;
+    flex-direction: column;
+}
+
 /* 作業メモ ヘッダーボタン */
 .work-notes-toggle-button {
     width: 100%;
@@ -19,6 +25,7 @@
     font-weight: 600;
     font-size: 13px;
     padding: 8px 0;
+    margin-bottom: 12px;
     background: none;
     border: none;
     cursor: pointer;
@@ -34,12 +41,12 @@
     outline-offset: 2px;
 }
 
-/* BaseControlによる各フィールドのスタイル */
-.work-notes-post-status-info .work-notes-field {
+/* 各フィールドのスタイル（TextControl/SelectControl直接使用） */
+.work-notes-field {
     margin-bottom: 12px;
 }
 
-.work-notes-post-status-info .work-notes-field:last-child {
+.work-notes-field:last-child {
     margin-bottom: 0;
 }
 
