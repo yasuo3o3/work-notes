@@ -15,7 +15,7 @@
     const { createElement: e, Fragment } = wp.element;
     const { PluginPostStatusInfo } = wp.editPost;
     const { useSelect, useDispatch } = wp.data;
-    const { TextControl, SelectControl, TextareaControl, PanelRow, Button } = wp.components;
+    const { TextControl, SelectControl, BaseControl, Button } = wp.components;
     const { useEntityProp } = wp.coreData;
     const { registerPlugin } = wp.plugins;
     const { __ } = wp.i18n;
@@ -78,7 +78,7 @@
             className: 'work-notes-post-status-info'
         }, 
             // タイトル行（クリックで展開・折りたたみ）
-            e(PanelRow, {
+            e('div', {
                 className: 'work-notes-header'
             }, 
                 e(Button, {
@@ -91,7 +91,10 @@
             
             // 折りたたみ可能なコンテンツ
             isExpanded && e(Fragment, {},
-                e(PanelRow, {},
+                // 対象タイプ
+                e(BaseControl, {
+                    className: 'work-notes-field'
+                },
                     e(SelectControl, {
                         label: __('対象タイプ', 'work-notes'),
                         value: currentTargetType,
@@ -107,8 +110,10 @@
                     })
                 ),
                 
-                e(PanelRow, {},
-                    // 対象ID
+                // 対象ID
+                e(BaseControl, {
+                    className: 'work-notes-field'
+                },
                     e(TextControl, {
                         label: __('対象ID（投稿IDなど）', 'work-notes'),
                         value: currentTargetId,
@@ -118,8 +123,10 @@
                     })
                 ),
                 
-                e(PanelRow, {},
-                    // 対象ラベル
+                // 対象ラベル
+                e(BaseControl, {
+                    className: 'work-notes-field'
+                },
                     e(TextControl, {
                         label: __('対象ラベル（例：トップページ、パーマリンク設定 等）', 'work-notes'),
                         value: currentTargetLabel,
@@ -129,8 +136,10 @@
                     })
                 ),
                 
-                e(PanelRow, {},
-                    // 依頼元
+                // 依頼元
+                e(BaseControl, {
+                    className: 'work-notes-field'
+                },
                     e(SelectControl, {
                         label: __('依頼元', 'work-notes'),
                         value: requesterSelectOptions.find(opt => opt.value === currentRequester) ? currentRequester : '__custom__',
@@ -148,7 +157,9 @@
                 
                 // 依頼元カスタム入力（セレクトで__custom__が選択されている場合のみ表示）
                 (requesterSelectOptions.find(opt => opt.value === currentRequester) ? null :
-                    e(PanelRow, {},
+                    e(BaseControl, {
+                        className: 'work-notes-field'
+                    },
                         e(TextControl, {
                             label: __('依頼元（手入力）', 'work-notes'),
                             value: currentRequester,
@@ -159,8 +170,10 @@
                     )
                 ),
                 
-                e(PanelRow, {},
-                    // 担当者
+                // 担当者
+                e(BaseControl, {
+                    className: 'work-notes-field'
+                },
                     e(SelectControl, {
                         label: __('担当者', 'work-notes'),
                         value: workerSelectOptions.find(opt => opt.value === currentWorker) ? currentWorker : '__custom__',
@@ -177,7 +190,9 @@
                 
                 // 担当者カスタム入力
                 (workerSelectOptions.find(opt => opt.value === currentWorker) ? null :
-                    e(PanelRow, {},
+                    e(BaseControl, {
+                        className: 'work-notes-field'
+                    },
                         e(TextControl, {
                             label: __('担当者（手入力）', 'work-notes'),
                             value: currentWorker,
@@ -188,8 +203,10 @@
                     )
                 ),
                 
-                e(PanelRow, {},
-                    // ステータス
+                // ステータス
+                e(BaseControl, {
+                    className: 'work-notes-field'
+                },
                     e(SelectControl, {
                         label: __('ステータス', 'work-notes'),
                         value: currentStatus,
@@ -204,8 +221,10 @@
                     })
                 ),
                 
-                e(PanelRow, {},
-                    // 実施日
+                // 実施日
+                e(BaseControl, {
+                    className: 'work-notes-field'
+                },
                     e(TextControl, {
                         label: __('実施日', 'work-notes'),
                         type: 'date',
