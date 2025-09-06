@@ -277,16 +277,16 @@ class OF_Work_Notes {
     /* ===== メタボックス ===== */
 
     public function add_meta_boxes() {
-        // Classic Editorの場合のみメタボックスを追加
-        // 作業メモ投稿タイプの場合
+        // 作業メモCPTはそのまま維持（既存機能の互換性）
         if (!function_exists('use_block_editor_for_post_type') || !use_block_editor_for_post_type(self::CPT)) {
             add_meta_box('ofwn_fields', __('作業メモ属性', 'work-notes'), [$this, 'box_note_fields'], self::CPT, 'side', 'default');
         }
         
-        // その他の投稿タイプの場合
-        foreach (get_post_types(['public' => true], 'names') as $pt) {
-            if (!function_exists('use_block_editor_for_post_type') || !use_block_editor_for_post_type($pt)) {
-                add_meta_box('ofwn_parent', __('作業メモ', 'work-notes'), [$this, 'box_parent_notes'], $pt, 'normal', 'default');
+        // 投稿と固定ページにClassic Editor時のみメタボックス追加
+        $target_post_types = ['post', 'page'];
+        foreach ($target_post_types as $post_type) {
+            if (!function_exists('use_block_editor_for_post_type') || !use_block_editor_for_post_type($post_type)) {
+                add_meta_box('ofwn_parent', __('作業メモ', 'work-notes'), [$this, 'box_parent_notes'], $post_type, 'normal', 'default');
             }
         }
     }
@@ -539,7 +539,28 @@ class OF_Work_Notes {
      * 本番での保存バグを修正するための REST API 対応
      */
     public function register_meta_fields() {
-        // 依頼元フィールド（仕様書での ofwn_requester に相当）
+        // 投稿と固定ページに作業メモのメタフィールドを登録
+        $target_post_types = ['post', 'page'];
+        $all_meta_fields = [
+            '_ofwn_requester', '_ofwn_worker', '_ofwn_target_type', 
+            '_ofwn_target_id', '_ofwn_target_label', '_ofwn_status', '_ofwn_work_date'
+        ];
+        
+        foreach ($target_post_types as $post_type) {
+            foreach ($all_meta_fields as $meta_key) {
+                register_post_meta($post_type, $meta_key, [
+                    'show_in_rest' => true,
+                    'single' => true,
+                    'type' => 'string',
+                    'auth_callback' => function($allowed, $meta_key, $post_id) {
+                        return current_user_can('edit_post', $post_id);
+                    },
+                    'sanitize_callback' => 'sanitize_text_field'
+                ]);
+            }
+        }
+        
+        // 既存の作業メモCPT用メタフィールドも維持（互換性のため）
         register_post_meta(self::CPT, '_ofwn_requester', [
             'show_in_rest' => true,
             'single' => true,
@@ -550,7 +571,6 @@ class OF_Work_Notes {
             'sanitize_callback' => 'sanitize_text_field'
         ]);
         
-        // 担当者フィールド（仕様書での ofwn_assignee に相当）
         register_post_meta(self::CPT, '_ofwn_worker', [
             'show_in_rest' => true,
             'single' => true,
@@ -561,7 +581,6 @@ class OF_Work_Notes {
             'sanitize_callback' => 'sanitize_text_field'
         ]);
         
-        // その他のメタフィールドもブロックエディタ対応
         $other_metas = [
             '_ofwn_target_type', '_ofwn_target_id', '_ofwn_target_label', 
             '_ofwn_status', '_ofwn_work_date'
@@ -771,9 +790,10 @@ class OF_Work_Notes {
      * Gutenberg サイドバー用アセットを読み込み
      */
     public function enqueue_gutenberg_sidebar_assets() {
-        // 作業メモ投稿タイプの編集画面のみで読み込み
+        // 投稿と固定ページの編集画面のみで読み込み
+        $target_post_types = ['post', 'page'];
         $screen = get_current_screen();
-        if (!$screen || $screen->post_type !== self::CPT) {
+        if (!$screen || !in_array($screen->post_type, $target_post_types)) {
             return;
         }
         
@@ -783,7 +803,9 @@ class OF_Work_Notes {
         }
         
         // Gutenberg環境での念のためのメタボックス削除（保険処理）
-        remove_meta_box('ofwn_fields', self::CPT, 'side');
+        foreach ($target_post_types as $post_type) {
+            remove_meta_box('ofwn_parent', $post_type, 'normal');
+        }
         
         wp_enqueue_script(
             'ofwn-gutenberg-sidebar',

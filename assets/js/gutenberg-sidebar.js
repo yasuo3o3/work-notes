@@ -25,8 +25,9 @@
             select('core/editor').getCurrentPostId(), []
         );
         
-        // 作業メモ投稿タイプでない場合は表示しない
-        if (postType !== 'of_work_note') {
+        // 投稿と固定ページでない場合は表示しない
+        const targetPostTypes = ['post', 'page'];
+        if (!targetPostTypes.includes(postType)) {
             return null;
         }
         
