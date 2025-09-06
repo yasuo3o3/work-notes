@@ -7,3 +7,20 @@
 .ofwn-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin:0;}
 .column-ofwn_status{width:90px}
 .column-ofwn_date{width:120px}
+
+/* 設定画面のラベル幅調整 */
+.work-notes_page_ofwn-settings .form-table th {
+    width: 250px;
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+/* マスター設定の入力欄調整 */
+.work-notes_page_ofwn-settings textarea[name*="ofwn_requesters"],
+.work-notes_page_ofwn-settings textarea[name*="ofwn_workers"] {
+    height: 72px;
+    min-height: 72px;
+    max-height: 200px;
+    overflow-y: auto;
+    resize: vertical;
+}

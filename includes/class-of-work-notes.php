@@ -179,13 +179,13 @@ class OF_Work_Notes {
 
         add_settings_field(self::OPT_REQUESTERS, __('依頼元マスター（1行1件）', 'work-notes'), function(){
             $v = get_option(self::OPT_REQUESTERS, []);
-            echo '<textarea name="'.esc_attr(self::OPT_REQUESTERS).'[]" rows="8" style="width:600px;">'.esc_textarea(implode("\n", $v))."</textarea>";
+            echo '<textarea name="'.esc_attr(self::OPT_REQUESTERS).'[]" rows="3" style="width:600px;">'.esc_textarea(implode("\n", $v))."</textarea>";
             echo '<p class="description">' . esc_html__('ここに入力した内容が「依頼元」のセレクトに表示されます。', 'work-notes') . '</p>';
         }, 'ofwn_settings', 'ofwn_section_main');
 
         add_settings_field(self::OPT_WORKERS, __('担当者マスター（1行1件）', 'work-notes'), function(){
             $v = get_option(self::OPT_WORKERS, $this->default_workers());
-            echo '<textarea name="'.esc_attr(self::OPT_WORKERS).'[]" rows="8" style="width:600px;">'.esc_textarea(implode("\n", $v))."</textarea>";
+            echo '<textarea name="'.esc_attr(self::OPT_WORKERS).'[]" rows="3" style="width:600px;">'.esc_textarea(implode("\n", $v))."</textarea>";
             echo '<p class="description">' . esc_html__('ここに入力した内容が「担当者」のセレクトに表示されます。', 'work-notes') . '</p>';
         }, 'ofwn_settings', 'ofwn_section_main');
 
