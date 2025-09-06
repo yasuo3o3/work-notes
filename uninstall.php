@@ -4,11 +4,14 @@ if (!defined('WP_UNINSTALL_PLUGIN')) exit;
 // オプションの削除
 delete_option('ofwn_requesters');
 delete_option('ofwn_workers');
+delete_option('ofwn_update_channel');
+delete_option('ofwn_migrated_version');
 
-// 作業ログ促し機能関連オプションの削除
+// 通知機能関連オプションの削除（マイグレーションで削除されているが念のため）
 delete_option('of_worklog_target_user_ids');
 delete_option('of_worklog_target_post_types'); 
 delete_option('of_worklog_min_role');
+delete_option('ofwn_worklog_mode');
 
 // カスタム投稿タイプとメタデータのバッチ削除
 global $wpdb;
@@ -50,8 +53,24 @@ $wpdb->query($wpdb->prepare(
     '_ofwn_%'
 ));
 
-// 作業ログメタデータも削除
+// 通知機能関連のメタデータも削除
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
-    'work_log_%'
+    'ofwn_worklog_%'
+));
+
+$wpdb->query($wpdb->prepare(
+    "DELETE FROM {$wpdb->usermeta} WHERE meta_key LIKE %s",
+    'ofwn_worklog_%'
+));
+
+// 通知機能関連のトランジェントを削除
+$wpdb->query($wpdb->prepare(
+    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+    '_transient_ofwn_worklog_%'
+));
+
+$wpdb->query($wpdb->prepare(
+    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+    '_transient_timeout_ofwn_worklog_%'
 ));

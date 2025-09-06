@@ -41,7 +41,7 @@ class OF_Work_Notes {
     }
     
     /**
-     * 作業ログ促し機能を初期化
+     * 作業ログ設定機能を初期化
      */
     private function init_worklog_features() {
         // 設定クラスを初期化
@@ -49,17 +49,6 @@ class OF_Work_Notes {
             require_once OFWN_DIR . 'includes/class-worklog-settings.php';
         }
         new OFWN_Worklog_Settings();
-        
-        // メタデータクラスを初期化
-        if (!class_exists('OFWN_Worklog_Meta')) {
-            require_once OFWN_DIR . 'includes/class-worklog-meta.php';
-        }
-        new OFWN_Worklog_Meta();
-        
-        // エディタ統合（管理画面のみ）
-        if (is_admin()) {
-            add_action('admin_enqueue_scripts', [$this, 'enqueue_worklog_editor_assets']);
-        }
     }
 
     /* ===== 基本 ===== */
@@ -764,99 +753,7 @@ class OF_Work_Notes {
         echo '</form></div>';
     }
     
-    /**
-     * 作業ログエディタ用アセットを読み込み
-     */
-    public function enqueue_worklog_editor_assets($hook) {
-        // 緊急停止フラグ
-        if (defined('OFWN_DISABLE_WORKLOG_NOTICE') && OFWN_DISABLE_WORKLOG_NOTICE) {
-            return;
-        }
-        
-        // 早期リターン：投稿編集画面のみ
-        if (!in_array($hook, ['post.php', 'post-new.php'], true)) {
-            return;
-        }
-        
-        // スクリーンチェックを最初に実行
-        $screen = get_current_screen();
-        if (!$screen || !in_array($screen->post_type, ['post', 'page'], true)) {
-            return;
-        }
-        
-        // モード管理による分岐
-        $mode = get_option('ofwn_worklog_mode', 'manual');
-        
-        if ('disabled' === $mode) {
-            return;
-        }
-        
-        if ('manual' === $mode) {
-            // 厳密チェック
-            if (!class_exists('OFWN_Worklog_Settings')) {
-                return;
-            }
-            
-            if (!OFWN_Worklog_Settings::is_target_post_type($screen->post_type)) {
-                return;
-            }
-            
-            if (!OFWN_Worklog_Settings::is_target_user()) {
-                return;
-            }
-        }
-        
-        // force モードの場合は上記チェックをスキップ
-        
-        // Gutenberg エディタかどうかチェック
-        if (!$this->is_gutenberg_page()) {
-            return;
-        }
-        
-        wp_enqueue_script(
-            'ofwn-worklog-editor',
-            OFWN_URL . 'assets/worklog-editor.js',
-            ['wp-data', 'wp-editor', 'wp-core-data', 'wp-notices', 'wp-element', 'wp-i18n'],
-            filemtime(OFWN_DIR . 'assets/worklog-editor.js'),
-            true
-        );
-        
-        wp_localize_script('ofwn-worklog-editor', 'ofwnWorklogEditor', [
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('ofwn_worklog_nonce'),
-            'post_id' => get_the_ID(),
-            'mode' => $mode,
-            'autoHideDelay' => 10000, // 10秒で自動消失
-            'strings' => [
-                /* translators: Snackbar message asking to record work log */
-                'prompt_message' => apply_filters('of_worklog_snackbar_message', __('今回の変更の作業ログを残しますか？', 'work-notes')),
-                /* translators: Button label to write work log immediately */
-                'write_now' => __('今すぐ書く', 'work-notes'),
-                /* translators: Button label to skip work log for this time */
-                'skip_this_time' => __('今回はスルー', 'work-notes'),
-                /* translators: Prompt message for fallback work log input dialog */
-                'fallback_prompt' => __('作業ログを入力してください（空の場合はスキップされます）:', 'work-notes')
-            ]
-        ]);
-    }
     
-    /**
-     * Gutenberg エディタであるかどうか判定
-     */
-    private function is_gutenberg_page() {
-        // WordPress 5.0+ の Gutenberg エディタチェック
-        if (function_exists('is_gutenberg_page') && is_gutenberg_page()) {
-            return true;
-        }
-        
-        // ブロックエディタが有効かどうか
-        if (function_exists('use_block_editor_for_post')) {
-            global $post;
-            return $post && use_block_editor_for_post($post);
-        }
-        
-        return false;
-    }
     
     /* ===== 仮想配布ルート ===== */
     
