@@ -277,9 +277,17 @@ class OF_Work_Notes {
     /* ===== メタボックス ===== */
 
     public function add_meta_boxes() {
-        add_meta_box('ofwn_fields', __('作業メモ属性', 'work-notes'), [$this, 'box_note_fields'], self::CPT, 'side', 'default');
+        // Classic Editorの場合のみメタボックスを追加
+        // 作業メモ投稿タイプの場合
+        if (!function_exists('use_block_editor_for_post_type') || !use_block_editor_for_post_type(self::CPT)) {
+            add_meta_box('ofwn_fields', __('作業メモ属性', 'work-notes'), [$this, 'box_note_fields'], self::CPT, 'side', 'default');
+        }
+        
+        // その他の投稿タイプの場合
         foreach (get_post_types(['public' => true], 'names') as $pt) {
-            add_meta_box('ofwn_parent', __('作業メモ', 'work-notes'), [$this, 'box_parent_notes'], $pt, 'normal', 'default');
+            if (!function_exists('use_block_editor_for_post_type') || !use_block_editor_for_post_type($pt)) {
+                add_meta_box('ofwn_parent', __('作業メモ', 'work-notes'), [$this, 'box_parent_notes'], $pt, 'normal', 'default');
+            }
         }
     }
 
@@ -773,6 +781,9 @@ class OF_Work_Notes {
         if (!$this->is_gutenberg_editor()) {
             return;
         }
+        
+        // Gutenberg環境での念のためのメタボックス削除（保険処理）
+        remove_meta_box('ofwn_fields', self::CPT, 'side');
         
         wp_enqueue_script(
             'ofwn-gutenberg-sidebar',

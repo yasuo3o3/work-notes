@@ -30,8 +30,8 @@
             return null;
         }
         
-        // 折りたたみ状態の管理
-        const [isExpanded, setIsExpanded] = useState(false);
+        // 折りたたみ状態の管理（初期状態は展開）
+        const [isExpanded, setIsExpanded] = useState(true);
         
         // メタフィールドのフック（個別にフック）
         const [meta, setMeta] = useEntityProp('postType', postType, 'meta', postId);

@@ -4,14 +4,16 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 ### Added
-- Gutenberg ブロックエディタの右サイドバーに「作業メモ」パネルを追加
-- PluginDocumentSettingPanel を使用した作業メモ入力UI
-- Classic Editor では既存のメタボックスと併存可能
+- Gutenberg ブロックエディタの公開ステータス直下に「作業メモ」UIを配置
+- PluginPostStatusInfo を使用した作業メモ入力パネル
+- Classic Editor では既存のメタボックスを維持
 
 ### Changed
 - 作業メモ通知UI機能を完全削除（Snackbar・AJAX・設定項目等）
 - 設定メニューを「作業ログ設定」に統合、旧URLからのリダイレクト対応
 - メタボックスのラベル幅とテキストエリア高さを調整
+- Gutenberg環境ではメタボックスを非表示にして公開ステータス直下に統一
+- 作業メモUIの初期状態を展開表示に変更（視認性向上）
 
 ### Removed
 - worklog-editor.js（通知表示JavaScript）
