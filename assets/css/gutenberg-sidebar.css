@@ -12,6 +12,9 @@
 /* 作業メモ ヘッダーボタン */
 .work-notes-toggle-button {
     width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     text-align: left;
     font-weight: 600;
     font-size: 13px;
@@ -71,4 +74,89 @@
 /* 折りたたみ状態でのアニメーション */
 .work-notes-post-status-info .components-panel__row {
     transition: all 0.2s ease-in-out;
+}
+
+/* =================================================================
+ * 縦並び・幅100%・適切な余白の修正（横並び問題の解決）
+ * ================================================================= */
+
+/* 1) ラベルを上、入力を下に縦積み */
+.work-notes-post-status-info .components-input-base,
+.work-notes-post-status-info .components-panel__row {
+    display: block;
+    flex-direction: column;
+}
+
+.work-notes-post-status-info .components-input-control__container,
+.work-notes-post-status-info .components-flex {
+    display: block !important;
+}
+
+.work-notes-post-status-info .components-input-control__label {
+    display: block;
+    margin-bottom: 4px;
+}
+
+/* 2) 幅100%に統一 */
+.work-notes-post-status-info .components-base-control,
+.work-notes-post-status-info .components-select-control__input,
+.work-notes-post-status-info .components-text-control__input,
+.work-notes-post-status-info input[type="date"] {
+    width: 100% !important;
+    box-sizing: border-box;
+}
+
+/* 3) 余白と行間の調整 */
+.work-notes-post-status-info .components-base-control__field {
+    margin-bottom: 12px;
+}
+
+.work-notes-post-status-info .components-base-control__field:last-child {
+    margin-bottom: 8px;
+}
+
+/* 4) セレクトコントロールとテキストコントロールの統一 */
+.work-notes-post-status-info .components-select-control,
+.work-notes-post-status-info .components-text-control {
+    width: 100% !important;
+    margin-bottom: 0;
+}
+
+/* 5) PanelRowの内部要素を縦並びに強制 */
+.work-notes-post-status-info .components-panel__row > * {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+/* 6) フレックスボックスの無効化 */
+.work-notes-post-status-info .components-h-stack,
+.work-notes-post-status-info .components-v-stack {
+    display: block !important;
+}
+
+/* 7) 入力要素の最小幅設定 */
+.work-notes-post-status-info select,
+.work-notes-post-status-info input[type="text"],
+.work-notes-post-status-info input[type="date"] {
+    min-width: 100% !important;
+    width: 100% !important;
+}
+
+/* 8) 折りたたみ時の余白調整 */
+.work-notes-post-status-info .work-notes-header {
+    margin-bottom: 8px;
+}
+
+.work-notes-post-status-info .work-notes-header:last-child {
+    margin-bottom: 0;
+}
+
+/* 9) 細かい視覚調整 */
+.work-notes-post-status-info .components-base-control__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #1e1e1e;
+    margin-bottom: 6px;
+    display: block;
 }
