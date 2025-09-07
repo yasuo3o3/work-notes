@@ -724,9 +724,6 @@ class OF_Work_Notes {
             update_post_meta($note_id, '_ofwn_worker', sanitize_text_field($workerVal));
             update_post_meta($note_id, '_ofwn_status', $status);
             update_post_meta($note_id, '_ofwn_work_date', $date);
-            
-            // 正規リンク用メタフィールドを自動付与
-            update_post_meta($note_id, '_ofwn_bound_post_id', (int)$post_id);
         }
     }
 
@@ -759,9 +756,6 @@ class OF_Work_Notes {
                     update_post_meta($post_id, '_ofwn_target_type', 'post');
                     update_post_meta($post_id, '_ofwn_target_id', (string)$pid);
                     update_post_meta($post_id, '_ofwn_target_label', get_the_title($pid));
-                    
-                    // 正規リンク用メタフィールドを自動付与
-                    update_post_meta($post_id, '_ofwn_bound_post_id', $pid);
                 }
             }, 10, 1);
         }
@@ -852,40 +846,12 @@ class OF_Work_Notes {
         $requesters = get_option('ofwn_requesters', []);
         $workers = get_option('ofwn_workers', $this->default_workers());
         
-        // 現在の投稿IDを取得
-        $current_post_id = 0;
-        if (isset($_GET['post'])) {
-            $current_post_id = (int)$_GET['post'];
-        } elseif (isset($_POST['post_ID'])) {
-            $current_post_id = (int)$_POST['post_ID'];
-        }
-        
-        // 初期値用の最新作業メモを取得
-        $prefill_data = null;
-        if ($current_post_id) {
-            $latest_note = $this->get_latest_work_note_for_prefill($current_post_id);
-            if ($latest_note) {
-                $prefill_data = [
-                    'target_type' => $latest_note['target_type'] ?: 'post',
-                    'target_id' => (string)$current_post_id, // 現在の投稿IDを設定
-                    'requester' => $latest_note['requester'],
-                    'worker' => $latest_note['worker'],
-                    'needs_backfill' => $latest_note['needs_backfill'],
-                    'note_id' => $latest_note['note_id'],
-                    'current_post_id' => $current_post_id
-                ];
-            }
-        }
-        
         wp_localize_script('ofwn-gutenberg-sidebar', 'ofwnGutenbergData', [
             'requesters' => $requesters,
             'workers' => $workers,
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('ofwn_sidebar_nonce')
         ]);
-        
-        // 初期値データを別の変数として渡す
-        wp_localize_script('ofwn-gutenberg-sidebar', 'ofwnPrefill', $prefill_data ?: []);
     }
     
     /**
@@ -906,65 +872,6 @@ class OF_Work_Notes {
         return false;
     }
     
-    /**
-     * 指定投稿に紐づく最新の作業メモを取得（初期値流し込み用）
-     * 正規リンク→フォールバック→lazy backfillの順で実行
-     */
-    private function get_latest_work_note_for_prefill($post_id) {
-        $post_id = (int)$post_id;
-        if (!$post_id) return null;
-        
-        // 1. 正規リンクで検索（_ofwn_bound_post_id）
-        $query_args = [
-            'post_type' => self::CPT,
-            'posts_per_page' => 1,
-            'post_status' => 'publish',
-            'no_found_rows' => true,
-            'update_post_meta_cache' => true,
-            'meta_query' => [
-                ['key' => '_ofwn_bound_post_id', 'value' => $post_id, 'type' => 'NUMERIC', 'compare' => '=']
-            ],
-            'orderby' => [
-                'meta_value' => 'DESC',        // 実施日優先
-                'post_modified_gmt' => 'DESC', // 次点で更新日時
-                'post_date' => 'DESC'          // 最後に作成日時
-            ],
-            'meta_key' => '_ofwn_work_date'
-        ];
-        
-        $query = new WP_Query($query_args);
-        
-        // 2. 正規リンクでヒットしない場合、フォールバック検索
-        if (!$query->have_posts()) {
-            $query_args['meta_query'] = [
-                'relation' => 'AND',
-                ['key' => '_ofwn_target_type', 'value' => ['post', 'page'], 'compare' => 'IN'],
-                ['key' => '_ofwn_target_id', 'value' => (string)$post_id, 'compare' => '='],
-            ];
-            
-            $query = new WP_Query($query_args);
-        }
-        
-        if (!$query->have_posts()) {
-            return null;
-        }
-        
-        $latest_note = $query->posts[0];
-        
-        // フォールバック経由で取得した場合、lazy backfill用の情報を返す
-        $needs_backfill = !get_post_meta($latest_note->ID, '_ofwn_bound_post_id', true);
-        
-        return [
-            'note_id' => $latest_note->ID,
-            'target_type' => get_post_meta($latest_note->ID, '_ofwn_target_type', true),
-            'target_id' => get_post_meta($latest_note->ID, '_ofwn_target_id', true),
-            'requester' => get_post_meta($latest_note->ID, '_ofwn_requester', true),
-            'worker' => get_post_meta($latest_note->ID, '_ofwn_worker', true),
-            'needs_backfill' => $needs_backfill,
-            'current_post_id' => $post_id
-        ];
-    }
-
     /**
      * サイドバーデータ取得用AJAX
      */

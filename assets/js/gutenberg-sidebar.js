@@ -40,6 +40,10 @@
         // 折りたたみ状態の管理（初期状態は展開）
         const [isExpanded, setIsExpanded] = useState(true);
         
+        // 初期値適用フラグ（初回マウント1回のみ）
+        const [prefillApplied, setPrefillApplied] = useState(false);
+        const [backfillProcessed, setBackfillProcessed] = useState(false);
+        
         // メタフィールドのフック（個別にフック）
         const [meta, setMeta] = useEntityProp('postType', postType, 'meta', postId);
         
@@ -56,6 +60,66 @@
         const updateMeta = function(key, value) {
             setMeta({ ...meta, [key]: value });
         };
+        
+        // 初期値適用処理（初回マウント時のみ）
+        wp.element.useEffect(() => {
+            if (prefillApplied || !window.ofwnPrefill || !meta) {
+                return;
+            }
+            
+            const prefillData = window.ofwnPrefill;
+            let hasUpdates = false;
+            const updates = { ...meta };
+            
+            // 空フィールドにのみ初期値を適用
+            if (prefillData.target_type && (!meta._ofwn_target_type || meta._ofwn_target_type === '')) {
+                updates._ofwn_target_type = prefillData.target_type;
+                hasUpdates = true;
+            }
+            
+            if (prefillData.target_id && (!meta._ofwn_target_id || meta._ofwn_target_id === '')) {
+                updates._ofwn_target_id = prefillData.target_id;
+                hasUpdates = true;
+            }
+            
+            if (prefillData.requester && (!meta._ofwn_requester || meta._ofwn_requester === '')) {
+                updates._ofwn_requester = prefillData.requester;
+                hasUpdates = true;
+            }
+            
+            if (prefillData.worker && (!meta._ofwn_worker || meta._ofwn_worker === '')) {
+                updates._ofwn_worker = prefillData.worker;
+                hasUpdates = true;
+            }
+            
+            if (hasUpdates) {
+                setMeta(updates);
+                console.log('Work Notes: 初期値を適用しました', updates);
+            }
+            
+            setPrefillApplied(true);
+            
+            // lazy backfill処理
+            if (prefillData.needs_backfill && prefillData.note_id && prefillData.current_post_id && !backfillProcessed) {
+                setBackfillProcessed(true);
+                
+                // wp.apiFetch でbackfill実行
+                wp.apiFetch({
+                    path: '/wp/v2/of_work_note/' + prefillData.note_id,
+                    method: 'POST',
+                    data: {
+                        meta: {
+                            _ofwn_bound_post_id: prefillData.current_post_id
+                        }
+                    }
+                }).then(response => {
+                    console.log('Work Notes: lazy backfill完了', response);
+                }).catch(error => {
+                    console.warn('Work Notes: lazy backfill失敗', error);
+                });
+            }
+            
+        }, [meta, prefillApplied, backfillProcessed]);
         
         // 依頼元・担当者のオプション（サーバーから取得）
         const requesterOptions = window.ofwnGutenbergData?.requesters || [];
