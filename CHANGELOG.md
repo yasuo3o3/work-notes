@@ -10,6 +10,10 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - 投稿・固定ページ用のメタフィールド登録（REST API対応）
 
 ### Changed
+- **「対象ラベル」フィールドを廃止し、「作業タイトル」に統合**
+- **作業タイトルを2行入力に変更（Gutenberg・Classic Editor両対応）**
+- 既存データの自動移行：_ofwn_target_labelから_ofwn_work_titleへの統合
+- 一覧表示で作業タイトル優先、旧対象ラベル値のフォールバック対応
 - 作業メモ通知UI機能を完全削除（Snackbar・AJAX・設定項目等）
 - 設定メニューを「作業ログ設定」に統合、旧URLからのリダイレクト対応
 - メタボックスのラベル幅とテキストエリア高さを調整

@@ -50,13 +50,12 @@
         // 現在の値を取得（未定義の場合はデフォルト値を設定）
         const currentTargetType = meta?._ofwn_target_type || '';
         const currentTargetId = meta?._ofwn_target_id || '';
-        const currentTargetLabel = meta?._ofwn_target_label || '';
         const currentRequester = meta?._ofwn_requester || '';
         const currentWorker = meta?._ofwn_worker || '';
         const currentStatus = meta?._ofwn_status || '依頼';
         const currentWorkDate = meta?._ofwn_work_date || new Date().toISOString().split('T')[0];
-        // 新規追加: 作業タイトルと作業内容
-        const currentWorkTitle = meta?._ofwn_work_title || '';
+        // 統合された作業タイトル（対象ラベルからの移行を含む）
+        const currentWorkTitle = meta?._ofwn_work_title || meta?._ofwn_target_label || '';
         const currentWorkContent = meta?._ofwn_work_content || '';
         
         // メタ更新ヘルパー関数
@@ -184,15 +183,6 @@
                         }
                     }),
                     
-                    // 対象ラベル
-                    e(TextControl, {
-                        label: __('対象ラベル（例：トップページ、パーマリンク設定 等）', 'work-notes'),
-                        className: 'work-notes-field',
-                        value: currentTargetLabel,
-                        onChange: function(value) {
-                            updateMeta('_ofwn_target_label', value);
-                        }
-                    }),
                     
                     // 依頼元
                     e(SelectControl, {
@@ -272,11 +262,12 @@
                         }
                     }),
                     
-                    // 新規追加: 作業タイトル
+                    // 作業タイトル（2行入力）
                     e(TextControl, {
                         label: __('作業タイトル', 'work-notes'),
                         className: 'work-notes-field',
                         value: currentWorkTitle,
+                        rows: 2,
                         onChange: function(value) {
                             updateMeta('_ofwn_work_title', value);
                         }

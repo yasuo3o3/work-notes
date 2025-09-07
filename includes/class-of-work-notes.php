@@ -337,7 +337,8 @@ class OF_Work_Notes {
 
         $target_type  = $this->get_meta($post->ID, '_ofwn_target_type', '');
         $target_id    = $this->get_meta($post->ID, '_ofwn_target_id', '');
-        $target_label = $this->get_meta($post->ID, '_ofwn_target_label', '');
+        // 統合された作業タイトル（対象ラベルからの移行を含む）
+        $work_title = get_post_meta($post->ID, '_ofwn_work_title', true) ?: $this->get_meta($post->ID, '_ofwn_target_label', '');
         $status       = $this->get_meta($post->ID, '_ofwn_status', '依頼');
         $requester    = $this->get_meta($post->ID, '_ofwn_requester', '');
         $worker       = $this->get_meta($post->ID, '_ofwn_worker', wp_get_current_user()->display_name);
@@ -360,13 +361,10 @@ class OF_Work_Notes {
             <input type="text" name="ofwn_target_id" value="<?php echo esc_attr($target_id);?>" style="width:100%;">
         </label></p>
 
-        <p><label><?php esc_html_e('対象ラベル（例：トップページ、パーマリンク設定 等）', 'work-notes'); ?><br>
-            <input type="text" name="ofwn_target_label" value="<?php echo esc_attr($target_label);?>" style="width:100%;">
-        </label></p>
 
-        <!-- 新規追加: 作業タイトルと作業内容 -->
+        <!-- 作業タイトル（2行入力） -->
         <p><label><?php esc_html_e('作業タイトル', 'work-notes'); ?><br>
-            <input type="text" name="ofwn_work_title" value="<?php echo esc_attr(get_post_meta($post->ID, '_ofwn_work_title', true));?>" style="width:100%;">
+            <textarea name="ofwn_work_title" style="width:100%; height:50px;"><?php echo esc_textarea($work_title);?></textarea>
         </label></p>
 
         <p><label><?php esc_html_e('作業内容', 'work-notes'); ?><br>
@@ -443,7 +441,7 @@ class OF_Work_Notes {
         $map = [
             '_ofwn_target_type'  => 'ofwn_target_type',
             '_ofwn_target_id'    => 'ofwn_target_id',
-            '_ofwn_target_label' => 'ofwn_target_label',
+            // '_ofwn_target_label' => 'ofwn_target_label', // 廃止：作業タイトルに統合
             '_ofwn_requester'    => $requester,
             '_ofwn_worker'       => $worker,
             '_ofwn_status'       => 'ofwn_status',
@@ -532,10 +530,12 @@ class OF_Work_Notes {
     }
 
     public function col_content($col, $post_id) {
-        // 新規追加: 作業タイトル列の表示処理
+        // 作業タイトル列の表示処理（対象ラベルからの統合を含む）
         if ($col === 'work_title') {
             $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
-            echo esc_html($work_title ?: __('データなし', 'work-notes'));
+            $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
+            $display_title = $work_title ?: $target_label ?: __('データなし', 'work-notes');
+            echo esc_html($display_title);
         }
         // 新規追加: 作業内容列の表示処理
         if ($col === 'work_content') {
@@ -813,7 +813,7 @@ class OF_Work_Notes {
         if ($note_id && !is_wp_error($note_id)) {
             update_post_meta($note_id, '_ofwn_target_type', 'post');
             update_post_meta($note_id, '_ofwn_target_id', (string)$post_id);
-            update_post_meta($note_id, '_ofwn_target_label', get_the_title($post_id));
+            // update_post_meta($note_id, '_ofwn_target_label', get_the_title($post_id)); // 廃止：作業タイトルに統合
             update_post_meta($note_id, '_ofwn_requester', sanitize_text_field($requester));
             update_post_meta($note_id, '_ofwn_worker', sanitize_text_field($workerVal));
             update_post_meta($note_id, '_ofwn_status', $status);
@@ -953,7 +953,7 @@ class OF_Work_Notes {
             // 作業メモCPTにメタデータを設定
             update_post_meta($note_id, '_ofwn_target_type', $target_type ?: 'post');
             update_post_meta($note_id, '_ofwn_target_id', (string)$post_id);
-            update_post_meta($note_id, '_ofwn_target_label', $target_label ?: get_the_title($post_id));
+            // update_post_meta($note_id, '_ofwn_target_label', $target_label ?: get_the_title($post_id)); // 廃止：作業タイトルに統合
             update_post_meta($note_id, '_ofwn_requester', $requester);
             update_post_meta($note_id, '_ofwn_worker', $worker);
             update_post_meta($note_id, '_ofwn_status', $status ?: '依頼');
@@ -1055,7 +1055,7 @@ class OF_Work_Notes {
                     $pid = (int)substr($raw, 5);
                     update_post_meta($post_id, '_ofwn_target_type', 'post');
                     update_post_meta($post_id, '_ofwn_target_id', (string)$pid);
-                    update_post_meta($post_id, '_ofwn_target_label', get_the_title($pid));
+                    // update_post_meta($post_id, '_ofwn_target_label', get_the_title($pid)); // 廃止：作業タイトルに統合
                     
                     // 正規リンク用メタフィールドを自動付与
                     update_post_meta($post_id, '_ofwn_bound_post_id', $pid);
@@ -1651,7 +1651,7 @@ class OF_Work_Notes {
             'meta_input' => [
                 '_ofwn_target_type' => $target_type ?: $post->post_type,
                 '_ofwn_target_id' => $target_id ?: $post_id,
-                '_ofwn_target_label' => $target_label,
+                // '_ofwn_target_label' => $target_label, // 廃止：作業タイトルに統合
                 '_ofwn_requester' => $requester,
                 '_ofwn_worker' => $worker,
                 '_ofwn_status' => $status,

@@ -193,7 +193,8 @@ class OFWN_List_Table extends WP_List_Table {
                 'date'          => get_post_meta($pid, '_ofwn_work_date', true),
                 'target_type'   => get_post_meta($pid, '_ofwn_target_type', true),
                 'target_id'     => get_post_meta($pid, '_ofwn_target_id', true),
-                'target_label'  => get_post_meta($pid, '_ofwn_target_label', true),
+                'target_label'  => get_post_meta($pid, '_ofwn_target_label', true), // 旧データ互換用
+                'work_title'    => get_post_meta($pid, '_ofwn_work_title', true),
                 'author'        => get_the_author_meta('display_name', $p->post_author),
                 'edit_link'     => get_edit_post_link($pid),
             ];
@@ -228,7 +229,9 @@ class OFWN_List_Table extends WP_List_Table {
                     $title = get_the_title((int)$item['target_id']);
                     return '<a href="'.esc_url($link).'">'.esc_html($title ?: ('ID:'.$item['target_id'])).'</a>';
                 }
-                return esc_html($item['target_label'] ?: '—');
+                // 作業タイトル優先、なければ旧対象ラベル、どちらもなければダッシュ
+                $display_title = $item['work_title'] ?: $item['target_label'] ?: 'データなし';
+                return esc_html($display_title);
             case 'author':
                 return esc_html($item['author'] ?: '—');
             default:
