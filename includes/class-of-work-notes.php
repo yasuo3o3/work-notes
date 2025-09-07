@@ -745,6 +745,14 @@ class OF_Work_Notes {
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
         if (!current_user_can('edit_post', $post_id)) return;
         
+        // 投稿タイプの制限：postとpageのみ対象（CPT自身は除外）
+        if (!in_array($post->post_type, ['post', 'page'])) {
+            if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] Skipping auto-create for post_type: ' . $post->post_type . ' (ID: ' . $post_id . ')');
+            }
+            return;
+        }
+        
         // 作業メモ関連のメタデータを取得
         $target_type = get_post_meta($post_id, '_ofwn_target_type', true);
         $target_id = get_post_meta($post_id, '_ofwn_target_id', true);
