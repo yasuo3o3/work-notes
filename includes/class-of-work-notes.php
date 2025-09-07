@@ -18,6 +18,10 @@ class OF_Work_Notes {
         add_action('add_meta_boxes', [$this, 'add_meta_boxes']);
         add_action('save_post', [$this, 'save_note_meta']);
         add_action('save_post', [$this, 'capture_quick_note_from_parent'], 20, 2);
+        
+        // Gutenberg対応: 投稿/固定ページ保存時にメタデータから作業メモCPT自動生成
+        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 25, 2);
+        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 25, 2);
         add_filter('manage_edit-' . self::CPT . '_columns', [$this, 'cols']);
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'col_content'], 10, 2);
         add_filter('manage_edit-' . self::CPT . '_sortable_columns', [$this, 'sortable_cols']);
@@ -728,6 +732,112 @@ class OF_Work_Notes {
             // 正規リンク用メタフィールドを自動付与
             update_post_meta($note_id, '_ofwn_bound_post_id', (int)$post_id);
         }
+    }
+
+    /**
+     * Gutenberg対応: 投稿/固定ページ保存時にメタデータから作業メモCPTを自動生成
+     * save_post_post, save_post_page フックで実行
+     */
+    public function auto_create_work_note_from_meta($post_id, $post) {
+        // ガード条件
+        if (wp_is_post_revision($post_id)) return;
+        if (wp_is_post_autosave($post_id)) return;
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+        if (!current_user_can('edit_post', $post_id)) return;
+        
+        // 作業メモ関連のメタデータを取得
+        $target_type = get_post_meta($post_id, '_ofwn_target_type', true);
+        $target_id = get_post_meta($post_id, '_ofwn_target_id', true);
+        $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
+        $requester = get_post_meta($post_id, '_ofwn_requester', true);
+        $worker = get_post_meta($post_id, '_ofwn_worker', true);
+        $status = get_post_meta($post_id, '_ofwn_status', true);
+        $work_date = get_post_meta($post_id, '_ofwn_work_date', true);
+        
+        // いずれかのフィールドが空でない場合のみ処理続行
+        $has_content = !empty($target_type) || !empty($target_id) || !empty($target_label) || 
+                      !empty($requester) || !empty($worker) || !empty($status) || !empty($work_date);
+        
+        if (!$has_content) return;
+        
+        // 重複防止のためのハッシュ生成
+        $meta_payload = [
+            'target_type' => $target_type,
+            'target_id' => $target_id,
+            'target_label' => $target_label,
+            'requester' => $requester,
+            'worker' => $worker,
+            'status' => $status,
+            'work_date' => $work_date
+        ];
+        $current_hash = md5(wp_json_encode($meta_payload));
+        $last_hash = get_post_meta($post_id, '_ofwn_last_sync_hash', true);
+        
+        // ハッシュが同じなら重複防止でスキップ
+        if ($current_hash === $last_hash) {
+            return;
+        }
+        
+        // 作業メモCPTを作成
+        $note_title = '作業メモ ' . current_time('Y-m-d H:i');
+        $note_content = $this->generate_work_note_content($meta_payload, $post);
+        
+        $note_id = wp_insert_post([
+            'post_type' => self::CPT,
+            'post_status' => 'publish',
+            'post_title' => $note_title,
+            'post_content' => $note_content,
+            'post_author' => get_current_user_id(),
+        ], true);
+        
+        if (!is_wp_error($note_id) && $note_id) {
+            // 作業メモCPTにメタデータを設定
+            update_post_meta($note_id, '_ofwn_target_type', $target_type ?: 'post');
+            update_post_meta($note_id, '_ofwn_target_id', (string)$post_id);
+            update_post_meta($note_id, '_ofwn_target_label', $target_label ?: get_the_title($post_id));
+            update_post_meta($note_id, '_ofwn_requester', $requester);
+            update_post_meta($note_id, '_ofwn_worker', $worker);
+            update_post_meta($note_id, '_ofwn_status', $status ?: '依頼');
+            update_post_meta($note_id, '_ofwn_work_date', $work_date ?: current_time('Y-m-d'));
+            
+            // 正規リンク用メタフィールドを設定
+            update_post_meta($note_id, '_ofwn_bound_post_id', $post_id);
+            
+            // 重複防止用ハッシュを親投稿に保存
+            update_post_meta($post_id, '_ofwn_last_sync_hash', $current_hash);
+            
+            // デバッグログ
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] Auto-created work note ID: ' . $note_id . ' for post ID: ' . $post_id);
+            }
+        }
+    }
+    
+    /**
+     * 作業メモの内容を生成（Gutenbergサイドバーからの自動作成用）
+     */
+    private function generate_work_note_content($meta_payload, $post) {
+        $content_parts = [];
+        
+        $content_parts[] = sprintf('投稿「%s」の作業メモを右サイドバーから作成しました。', get_the_title($post));
+        
+        if (!empty($meta_payload['requester'])) {
+            $content_parts[] = "依頼元: " . $meta_payload['requester'];
+        }
+        
+        if (!empty($meta_payload['worker'])) {
+            $content_parts[] = "担当者: " . $meta_payload['worker'];
+        }
+        
+        if (!empty($meta_payload['status'])) {
+            $content_parts[] = "ステータス: " . $meta_payload['status'];
+        }
+        
+        if (!empty($meta_payload['work_date'])) {
+            $content_parts[] = "実施日: " . $meta_payload['work_date'];
+        }
+        
+        return implode("\n\n", $content_parts);
     }
 
     public function admin_bar_quick_add($wp_admin_bar) {
