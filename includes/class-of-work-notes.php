@@ -22,11 +22,11 @@ class OF_Work_Notes {
         // Gutenberg対応: 投稿/固定ページ保存時にメタデータから作業メモCPT自動生成
         // タイミング調査用: 優先度の異なるフックを追加
         add_action('save_post_post', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 25, 2);
-        add_action('save_post_post', [$this, 'debug_save_timing_late'], 95, 2);
+        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 99, 2);
+        add_action('save_post_post', [$this, 'debug_save_timing_late'], 100, 2);
         add_action('save_post_page', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 25, 2);
-        add_action('save_post_page', [$this, 'debug_save_timing_late'], 95, 2);
+        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 99, 2);
+        add_action('save_post_page', [$this, 'debug_save_timing_late'], 100, 2);
         add_filter('manage_edit-' . self::CPT . '_columns', [$this, 'cols']);
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'col_content'], 10, 2);
         add_filter('manage_edit-' . self::CPT . '_sortable_columns', [$this, 'sortable_cols']);
