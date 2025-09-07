@@ -27,6 +27,13 @@ class OF_Work_Notes {
         add_action('save_post_page', [$this, 'debug_save_timing_early'], 5, 2);
         add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 99, 2);
         add_action('save_post_page', [$this, 'debug_save_timing_late'], 100, 2);
+        
+        // 代替フック調査用
+        add_action('wp_after_insert_post', [$this, 'debug_after_insert_post'], 10, 4);
+        
+        // Step B: wp_after_insert_postでのバックアップCPT作成（save_postで失敗した場合の保険）
+        add_action('wp_after_insert_post', [$this, 'fallback_create_work_note_from_meta'], 20, 4);
+        
         add_filter('manage_edit-' . self::CPT . '_columns', [$this, 'cols']);
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'col_content'], 10, 2);
         add_filter('manage_edit-' . self::CPT . '_sortable_columns', [$this, 'sortable_cols']);
@@ -1506,6 +1513,166 @@ class OF_Work_Notes {
         }
         
         error_log('[OFWN TIMING LATE] Hook: ' . $current_action . ', Post: ' . $post_id . ', Title: "' . $work_title . '", Content: "' . $work_content . '", CPT_Count: ' . $cpt_count . $cpt_info);
+    }
+    
+    /**
+     * wp_after_insert_post調査用: 投稿挿入完了後のメタデータ確認
+     */
+    public function debug_after_insert_post($post_id, $post, $update, $post_before) {
+        if (!defined('WP_DEBUG_LOG') || !WP_DEBUG_LOG) return;
+        if (!in_array($post->post_type, ['post', 'page'])) return;
+        
+        $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+        $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        $requester = get_post_meta($post_id, '_ofwn_requester', true);
+        $worker = get_post_meta($post_id, '_ofwn_worker', true);
+        $status = get_post_meta($post_id, '_ofwn_status', true);
+        $work_date = get_post_meta($post_id, '_ofwn_work_date', true);
+        $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
+        
+        $is_rest = defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false';
+        $update_status = $update ? 'update' : 'new';
+        
+        error_log('[OFWN][wp_after_insert] Post: ' . $post_id . ', Type: ' . $post->post_type . ', Update: ' . $update_status . ', REST: ' . $is_rest);
+        error_log('[OFWN][wp_after_insert] work_title="' . $work_title . '" work_content="' . $work_content . '" requester="' . $requester . '" worker="' . $worker . '" status="' . $status . '" work_date="' . $work_date . '" target_label="' . $target_label . '"');
+    }
+    
+    /**
+     * wp_after_insert_postでのバックアップCPT作成
+     * save_postで作成できなかった場合の保険処理
+     */
+    public function fallback_create_work_note_from_meta($post_id, $post, $update, $post_before) {
+        // ガード条件
+        if (!in_array($post->post_type, ['post', 'page'])) return;
+        if (wp_is_post_revision($post_id)) return;
+        if (wp_is_post_autosave($post_id)) return;
+        if (!current_user_can('edit_post', $post_id)) return;
+        
+        // 既にCPTが作成されているかチェック
+        $existing_notes = get_posts([
+            'post_type' => self::CPT,
+            'posts_per_page' => 1,
+            'meta_query' => [
+                [
+                    'key' => '_ofwn_bound_post_id',
+                    'value' => $post_id,
+                    'compare' => '='
+                ]
+            ]
+        ]);
+        
+        if (!empty($existing_notes)) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN][fallback] CPT already exists for post ' . $post_id . ', skipping fallback creation');
+            }
+            return; // 既にCPTが存在する場合はスキップ
+        }
+        
+        // メタデータを確認
+        $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+        $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        $requester = get_post_meta($post_id, '_ofwn_requester', true);
+        $worker = get_post_meta($post_id, '_ofwn_worker', true);
+        $status = get_post_meta($post_id, '_ofwn_status', true);
+        $work_date = get_post_meta($post_id, '_ofwn_work_date', true);
+        $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
+        
+        // いずれかのフィールドが空でない場合のみ処理続行
+        $has_content = !empty($work_title) || !empty($work_content) || !empty($requester) || 
+                      !empty($worker) || !empty($status) || !empty($work_date) || !empty($target_label);
+        
+        if (!$has_content) return;
+        
+        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            error_log('[OFWN][fallback] Creating CPT via wp_after_insert_post for post ' . $post_id);
+        }
+        
+        // auto_create_work_note_from_meta と同じロジックでCPT作成
+        $this->create_work_note_from_meta_data($post_id, $post);
+    }
+    
+    /**
+     * メタデータからCPT作成の共通処理
+     * auto_create_work_note_from_meta と fallback_create_work_note_from_meta で共用
+     */
+    private function create_work_note_from_meta_data($post_id, $post) {
+        // 作業メモ関連のメタデータを取得
+        $target_type = get_post_meta($post_id, '_ofwn_target_type', true);
+        $target_id = get_post_meta($post_id, '_ofwn_target_id', true);
+        $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
+        $requester = get_post_meta($post_id, '_ofwn_requester', true);
+        $worker = get_post_meta($post_id, '_ofwn_worker', true);
+        $status = get_post_meta($post_id, '_ofwn_status', true);
+        $work_date = get_post_meta($post_id, '_ofwn_work_date', true);
+        $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+        $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        
+        // 重複防止のためのハッシュ生成
+        $meta_payload = [
+            'target_type' => $target_type,
+            'target_id' => $target_id,
+            'target_label' => $target_label,
+            'requester' => $requester,
+            'worker' => $worker,
+            'status' => $status,
+            'work_date' => $work_date,
+            'work_title' => $work_title,
+            'work_content' => $work_content,
+            'post_id' => $post_id
+        ];
+        
+        $content_hash = md5(serialize($meta_payload));
+        
+        // 同一内容のCPTが既に存在するかチェック
+        $duplicate_check = get_posts([
+            'post_type' => self::CPT,
+            'meta_query' => [
+                [
+                    'key' => '_ofwn_content_hash',
+                    'value' => $content_hash,
+                    'compare' => '='
+                ]
+            ]
+        ]);
+        
+        if (!empty($duplicate_check)) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] Duplicate work note detected, skipping creation for post ' . $post_id);
+            }
+            return;
+        }
+        
+        // CPT作成
+        $work_note_id = wp_insert_post([
+            'post_type' => self::CPT,
+            'post_status' => 'publish',
+            'post_title' => !empty($work_title) ? $work_title : 'Work Note for Post ' . $post_id,
+            'post_content' => $work_content,
+            'meta_input' => [
+                '_ofwn_target_type' => $target_type ?: $post->post_type,
+                '_ofwn_target_id' => $target_id ?: $post_id,
+                '_ofwn_target_label' => $target_label,
+                '_ofwn_requester' => $requester,
+                '_ofwn_worker' => $worker,
+                '_ofwn_status' => $status,
+                '_ofwn_work_date' => $work_date,
+                '_ofwn_work_title' => $work_title,
+                '_ofwn_work_content' => $work_content,
+                '_ofwn_bound_post_id' => $post_id,
+                '_ofwn_content_hash' => $content_hash
+            ]
+        ]);
+        
+        if ($work_note_id && !is_wp_error($work_note_id)) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] Auto-created work note ID: ' . $work_note_id . ' for post ID: ' . $post_id . ' (elapsed: ' . (microtime(true) * 1000 - $_SERVER['REQUEST_TIME_FLOAT'] * 1000) . 'ms)');
+            }
+        } else {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                $error_msg = is_wp_error($work_note_id) ? $work_note_id->get_error_message() : 'Unknown error';
+                error_log('[OFWN] Failed to create work note for post ' . $post_id . ': ' . $error_msg);
+            }
+        }
     }
     
 }
