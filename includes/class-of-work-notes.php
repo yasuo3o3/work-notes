@@ -20,8 +20,13 @@ class OF_Work_Notes {
         add_action('save_post', [$this, 'capture_quick_note_from_parent'], 20, 2);
         
         // Gutenberg対応: 投稿/固定ページ保存時にメタデータから作業メモCPT自動生成
+        // タイミング調査用: 優先度の異なるフックを追加
+        add_action('save_post_post', [$this, 'debug_save_timing_early'], 5, 2);
         add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 25, 2);
+        add_action('save_post_post', [$this, 'debug_save_timing_late'], 95, 2);
+        add_action('save_post_page', [$this, 'debug_save_timing_early'], 5, 2);
         add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 25, 2);
+        add_action('save_post_page', [$this, 'debug_save_timing_late'], 95, 2);
         add_filter('manage_edit-' . self::CPT . '_columns', [$this, 'cols']);
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'col_content'], 10, 2);
         add_filter('manage_edit-' . self::CPT . '_sortable_columns', [$this, 'sortable_cols']);
@@ -844,11 +849,20 @@ class OF_Work_Notes {
         $work_title_check = get_post_meta($post_id, '_ofwn_work_title', true);
         $work_content_check = get_post_meta($post_id, '_ofwn_work_content', true);
         
-        // デバッグログ: post/page保存時のメタ情報
+        // デバッグログ: post/page保存時のメタ情報（タイミング調査用）
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            error_log('[OFWN] Processing post/page save - ID: ' . $post_id . ', Type: ' . $post->post_type);
-            error_log('[OFWN] Work title from post: "' . $work_title_check . '", Work content from post: "' . $work_content_check . '"');
-            error_log('[OFWN] Other meta - requester: "' . $requester . '", worker: "' . $worker . '", status: "' . $status . '"');
+            $current_action = current_action();
+            $doing_autosave = defined('DOING_AUTOSAVE') && DOING_AUTOSAVE ? 'true' : 'false';
+            $is_rest = defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false';
+            error_log('[OFWN TIMING] Processing post/page save - ID: ' . $post_id . ', Type: ' . $post->post_type . ', Action: ' . $current_action . ', Autosave: ' . $doing_autosave . ', REST: ' . $is_rest);
+            error_log('[OFWN TIMING] Work title from post: "' . $work_title_check . '", Work content from post: "' . $work_content_check . '"');
+            error_log('[OFWN TIMING] Other meta - requester: "' . $requester . '", worker: "' . $worker . '", status: "' . $status . '"');
+            
+            // RESTリクエストのメタデータを確認
+            if ($is_rest && isset($_POST['meta'])) {
+                $rest_meta = $_POST['meta'];
+                error_log('[OFWN TIMING] REST meta received: ' . json_encode($rest_meta));
+            }
         }
         
         // いずれかのフィールドが空でない場合のみ処理続行（新フィールドも含める）
@@ -932,10 +946,13 @@ class OF_Work_Notes {
             
             // デバッグログ（新フィールド情報も含める）
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] Auto-created work note ID: ' . $note_id . ' for post ID: ' . $post_id);
-                error_log('[OFWN] auto-create transfer: src post=' . $post_id . ' -> note=' . $note_id . ', title="' . $work_title_from_post . '", content="' . $work_content_from_post . '"');
+                $elapsed_time = microtime(true) - ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true));
+                error_log('[OFWN TIMING] Auto-created work note ID: ' . $note_id . ' for post ID: ' . $post_id . ' (elapsed: ' . round($elapsed_time * 1000, 2) . 'ms)');
+                error_log('[OFWN TIMING] auto-create transfer: src post=' . $post_id . ' -> note=' . $note_id . ', title="' . $work_title_from_post . '", content="' . $work_content_from_post . '"');
                 if (!empty($existing_title) || !empty($existing_content)) {
-                    error_log('[OFWN] Transfer skipped: existing title="' . $existing_title . '", existing content="' . $existing_content . '"');
+                    error_log('[OFWN TIMING] Transfer skipped: existing title="' . $existing_title . '", existing content="' . $existing_content . '"');
+                } else {
+                    error_log('[OFWN TIMING] Transfer executed: new title="' . $work_title_from_post . '", new content="' . $work_content_from_post . '"');
                 }
             }
         }
@@ -1403,6 +1420,57 @@ class OF_Work_Notes {
                 )
             ]);
         }
+    }
+    
+    /**
+     * タイミング調査用: 早期段階でのメタデータ確認
+     */
+    public function debug_save_timing_early($post_id, $post) {
+        if (!defined('WP_DEBUG_LOG') || !WP_DEBUG_LOG) return;
+        if (!in_array($post->post_type, ['post', 'page'])) return;
+        
+        $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+        $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        $current_action = current_action();
+        $is_rest = defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false';
+        
+        error_log('[OFWN TIMING EARLY] Hook: ' . $current_action . ', Post: ' . $post_id . ', REST: ' . $is_rest . ', Title: "' . $work_title . '", Content: "' . $work_content . '"');
+    }
+    
+    /**
+     * タイミング調査用: 遅期段階でのメタデータ確認
+     */
+    public function debug_save_timing_late($post_id, $post) {
+        if (!defined('WP_DEBUG_LOG') || !WP_DEBUG_LOG) return;
+        if (!in_array($post->post_type, ['post', 'page'])) return;
+        
+        $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+        $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        $current_action = current_action();
+        
+        // 作成されたCPTの確認
+        $created_notes = get_posts([
+            'post_type' => self::CPT,
+            'posts_per_page' => 1,
+            'meta_query' => [
+                [
+                    'key' => '_ofwn_bound_post_id',
+                    'value' => $post_id,
+                    'compare' => '='
+                ]
+            ]
+        ]);
+        
+        $cpt_count = count($created_notes);
+        $cpt_info = '';
+        if ($cpt_count > 0) {
+            $note = $created_notes[0];
+            $cpt_title = get_post_meta($note->ID, '_ofwn_work_title', true);
+            $cpt_content = get_post_meta($note->ID, '_ofwn_work_content', true);
+            $cpt_info = ' CPT_ID: ' . $note->ID . ', CPT_Title: "' . $cpt_title . '", CPT_Content: "' . $cpt_content . '"';
+        }
+        
+        error_log('[OFWN TIMING LATE] Hook: ' . $current_action . ', Post: ' . $post_id . ', Title: "' . $work_title . '", Content: "' . $work_content . '", CPT_Count: ' . $cpt_count . $cpt_info);
     }
     
 }
