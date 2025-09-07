@@ -17,6 +17,7 @@ class OF_Work_Notes {
         $this->init_worklog_features();
         add_action('add_meta_boxes', [$this, 'add_meta_boxes']);
         add_action('save_post', [$this, 'save_note_meta']);
+        add_action('save_post', [$this, 'migrate_legacy_meta_to_post_fields'], 10, 2);
         add_action('save_post', [$this, 'capture_quick_note_from_parent'], 20, 2);
         
         // Gutenberg対応: 投稿/固定ページ保存時にメタデータから作業メモCPT自動生成
@@ -362,14 +363,7 @@ class OF_Work_Notes {
         </label></p>
 
 
-        <!-- 作業タイトル（2行入力） -->
-        <p><label><?php esc_html_e('作業タイトル', 'work-notes'); ?><br>
-            <textarea name="ofwn_work_title" style="width:100%; height:50px;"><?php echo esc_textarea($work_title);?></textarea>
-        </label></p>
-
-        <p><label><?php esc_html_e('作業内容', 'work-notes'); ?><br>
-            <textarea name="ofwn_work_content" style="width:100%; height:80px;"><?php echo esc_textarea(get_post_meta($post->ID, '_ofwn_work_content', true));?></textarea>
-        </label></p>
+        <!-- 作業タイトル・作業内容のUIは撤去（標準のタイトル欄・本文エディタを使用） -->
 
         <p class="ofwn-inline"><label><?php esc_html_e('依頼元', 'work-notes'); ?></label><br>
             <?php $this->render_select_with_custom('ofwn_requester', $req_opts, $requester, __('依頼元を手入力', 'work-notes')); ?>
@@ -446,21 +440,10 @@ class OF_Work_Notes {
             '_ofwn_worker'       => $worker,
             '_ofwn_status'       => 'ofwn_status',
             '_ofwn_work_date'    => 'ofwn_work_date',
-            // 修正: 新フィールドを$_POSTキー名で指定し、他のフィールドと同じ処理フローに合わせる
-            '_ofwn_work_title'   => 'ofwn_work_title',
-            '_ofwn_work_content' => 'ofwn_work_content',
+            // 作業タイトル・作業内容は標準のpost_title/post_contentを使用（メタ保存は不要）
         ];
         
-        // 作業内容が空で作業タイトルがある場合の自動コピー処理
-        $work_title_value = isset($_POST['ofwn_work_title']) ? sanitize_text_field($_POST['ofwn_work_title']) : '';
-        $work_content_value = isset($_POST['ofwn_work_content']) ? sanitize_textarea_field($_POST['ofwn_work_content']) : '';
-        
-        if (empty($work_content_value) && !empty($work_title_value)) {
-            $_POST['ofwn_work_content'] = $work_title_value; // $_POSTを更新して後続処理で使用
-            if ($debug_log) {
-                error_log('[OFWN] Auto-copied work_title to work_content: ' . $work_title_value);
-            }
-        }
+        // 作業タイトル・作業内容は標準フィールド使用のため自動コピー処理は不要
         // 保存前のログ
         if ($debug_log) {
             error_log('[OFWN] Saving meta: requester=' . $requester . ', worker=' . $worker);
@@ -488,11 +471,8 @@ class OF_Work_Notes {
         if ($debug_log) {
             $saved_req = get_post_meta($post_id, '_ofwn_requester', true);
             $saved_worker = get_post_meta($post_id, '_ofwn_worker', true);
-            // 新フィールドの保存状態も確認
-            $saved_title = get_post_meta($post_id, '_ofwn_work_title', true);
-            $saved_content = get_post_meta($post_id, '_ofwn_work_content', true);
             error_log('[OFWN] Post-save verification: requester=' . $saved_req . ', worker=' . $saved_worker);
-            error_log('[OFWN] save_note_meta map resolved: title="' . $saved_title . '" content="' . $saved_content . '" for note ID=' . $post_id);
+            error_log('[OFWN] Using standard post_title/post_content for work title and content');
         }
 
         if (empty($_POST['post_title'])) {
@@ -530,22 +510,26 @@ class OF_Work_Notes {
     }
 
     public function col_content($col, $post_id) {
-        // 作業タイトル列の表示処理（対象ラベルからの統合を含む）
+        // 作業タイトル列の表示処理（post_titleを使用、旧メタからフォールバック）
         if ($col === 'work_title') {
-            $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
-            $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
-            $display_title = $work_title ?: $target_label ?: __('データなし', 'work-notes');
+            $post_title = get_post_field('post_title', $post_id);
+            $fallback_title = get_post_meta($post_id, '_ofwn_work_title', true) ?: get_post_meta($post_id, '_ofwn_target_label', true);
+            $display_title = $post_title ?: $fallback_title ?: __('データなし', 'work-notes');
             echo esc_html($display_title);
         }
-        // 新規追加: 作業内容列の表示処理
+        // 作業内容列の表示処理（post_contentを使用、旧メタからフォールバック）
         if ($col === 'work_content') {
-            $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
-            // 長い内容は省略表示し、空の場合は'データなし'を表示
-            if (!empty($work_content)) {
-                $truncated_content = mb_strlen($work_content) > 50 ? mb_substr($work_content, 0, 47) . '...' : $work_content;
+            $post_content = get_post_field('post_content', $post_id);
+            $fallback_content = get_post_meta($post_id, '_ofwn_work_content', true);
+            $raw_content = $post_content ?: $fallback_content;
+            
+            if (!empty($raw_content)) {
+                // HTMLタグを除去し、40-60文字で要約
+                $plain_content = wp_strip_all_tags($raw_content);
+                $truncated_content = mb_strlen($plain_content) > 60 ? mb_substr($plain_content, 0, 57) . '...' : $plain_content;
                 echo esc_html($truncated_content);
             } else {
-                echo esc_html(__('データなし', 'work-notes'));
+                echo '—';
             }
         }
         if ($col === 'ofwn_requester') {
@@ -660,11 +644,11 @@ class OF_Work_Notes {
             'sanitize_callback' => 'absint'
         ]);
         
-        // 新規追加: 作業タイトルと作業内容のメタフィールド
-        // CPTだけでなくpost/pageにも登録してGutenbergサイドバーで使えるようにする
-        $work_meta_post_types = [self::CPT, 'post', 'page'];
+        // 作業タイトル・作業内容メタフィールド：post/page用のみ（Gutenbergサイドバー入力用）
+        // CPT（of_work_note）は標準のpost_title/post_contentを使用
+        $input_meta_post_types = ['post', 'page'];
         
-        foreach ($work_meta_post_types as $post_type) {
+        foreach ($input_meta_post_types as $post_type) {
             register_post_meta($post_type, '_ofwn_work_title', [
                 'show_in_rest' => true,
                 'single' => true,
@@ -685,6 +669,23 @@ class OF_Work_Notes {
                 'sanitize_callback' => 'sanitize_textarea_field'
             ]);
         }
+        
+        // CPT側では読み取り専用（移行フォールバック用）として残すが、REST非公開
+        register_post_meta(self::CPT, '_ofwn_work_title', [
+            'show_in_rest' => false,
+            'single' => true,
+            'type' => 'string',
+            'auth_callback' => '__return_false',
+            'sanitize_callback' => 'sanitize_text_field'
+        ]);
+        
+        register_post_meta(self::CPT, '_ofwn_work_content', [
+            'show_in_rest' => false,
+            'single' => true,
+            'type' => 'string',
+            'auth_callback' => '__return_false',
+            'sanitize_callback' => 'sanitize_textarea_field'
+        ]);
         
         $other_metas = [
             '_ofwn_target_type', '_ofwn_target_id', '_ofwn_target_label', 
@@ -937,9 +938,34 @@ class OF_Work_Notes {
             return;
         }
         
-        // 作業メモCPTを作成
-        $note_title = '作業メモ ' . current_time('Y-m-d H:i');
-        $note_content = $this->generate_work_note_content($meta_payload, $post);
+        // 作業メモCPTを作成（実データを直接post_title/post_contentに保存）
+        $user_work_title = $work_title ?: $target_label ?: '';
+        $user_work_content = $work_content ?: '';
+        
+        // 実値がある場合は使用、なければフォールバック
+        if (!empty($user_work_title)) {
+            $note_title = sanitize_text_field($user_work_title);
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] Using user work_title as post_title: ' . $note_title);
+            }
+        } else {
+            $note_title = '作業メモ ' . current_time('Y-m-d H:i');
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] No work_title found, using fallback: ' . $note_title);
+            }
+        }
+        
+        if (!empty($user_work_content)) {
+            $note_content = wp_kses_post($user_work_content);
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] Using user work_content as post_content');
+            }
+        } else {
+            $note_content = $this->generate_work_note_content($meta_payload, $post);
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] No work_content found, using generated content');
+            }
+        }
         
         $note_id = wp_insert_post([
             'post_type' => self::CPT,
@@ -959,25 +985,9 @@ class OF_Work_Notes {
             update_post_meta($note_id, '_ofwn_status', $status ?: '依頼');
             update_post_meta($note_id, '_ofwn_work_date', $work_date ?: current_time('Y-m-d'));
             
-            // 新規追加: 作業タイトルと作業内容をpost/pageからCPTへ転送
-            $work_title_from_post = get_post_meta($post_id, '_ofwn_work_title', true);
-            $work_content_from_post = get_post_meta($post_id, '_ofwn_work_content', true);
-            
-            // CPT側の既存値を確認（上書き防止のため）
-            $existing_title = get_post_meta($note_id, '_ofwn_work_title', true);
-            $existing_content = get_post_meta($note_id, '_ofwn_work_content', true);
-            
-            // 作業内容が空の場合は作業タイトルをコピー
-            if (empty($work_content_from_post) && !empty($work_title_from_post)) {
-                $work_content_from_post = $work_title_from_post;
-            }
-            
-            // 空の場合のみ転送（既に値がある場合は上書きしない）
-            if (empty($existing_title)) {
-                update_post_meta($note_id, '_ofwn_work_title', $work_title_from_post);
-            }
-            if (empty($existing_content)) {
-                update_post_meta($note_id, '_ofwn_work_content', $work_content_from_post);
+            // 旧処理：CPTへのメタフィールド転送は不要（post_title/post_contentに直接保存済み）
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] CPT created with direct post_title/post_content - no meta transfer needed');
             }
             
             // 正規リンク用メタフィールドを設定
@@ -1671,6 +1681,87 @@ class OF_Work_Notes {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 $error_msg = is_wp_error($work_note_id) ? $work_note_id->get_error_message() : 'Unknown error';
                 error_log('[OFWN] Failed to create work note for post ' . $post_id . ': ' . $error_msg);
+            }
+        }
+    }
+    
+    /**
+     * 既存データのソフト移行：旧メタからpost_title/post_contentへの一回限り移行
+     * save_postフックで実行（作業メモCPTのみ対象）
+     */
+    public function migrate_legacy_meta_to_post_fields($post_id, $post) {
+        // 作業メモCPTのみ対象
+        if ($post->post_type !== self::CPT) {
+            return;
+        }
+        
+        // 自動保存・リビジョン・権限チェック
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+        
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+        
+        // トグル機能（緊急切戻し用）
+        if (!apply_filters('ofwn_enable_legacy_migration', true)) {
+            return;
+        }
+        
+        // 現在のpost_title/post_contentを取得
+        $current_title = get_post_field('post_title', $post_id);
+        $current_content = get_post_field('post_content', $post_id);
+        
+        // 旧メタフィールドを取得
+        $legacy_title = get_post_meta($post_id, '_ofwn_work_title', true);
+        $legacy_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        $legacy_target_label = get_post_meta($post_id, '_ofwn_target_label', true);
+        
+        $needs_migration = false;
+        $migration_data = [];
+        
+        // タイトル移行判定（空か固定文字列の場合）
+        if (empty($current_title) || preg_match('/^作業メモ \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $current_title)) {
+            $new_title = $legacy_title ?: $legacy_target_label;
+            if (!empty($new_title)) {
+                $migration_data['post_title'] = sanitize_text_field($new_title);
+                $needs_migration = true;
+                
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN] Migration: title "' . $current_title . '" -> "' . $new_title . '"');
+                }
+            }
+        }
+        
+        // 内容移行判定（空か自動生成文字列の場合）
+        if (empty($current_content) || strpos($current_content, '投稿「') === 0) {
+            if (!empty($legacy_content)) {
+                $migration_data['post_content'] = wp_kses_post($legacy_content);
+                $needs_migration = true;
+                
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN] Migration: migrating legacy content to post_content');
+                }
+            }
+        }
+        
+        // 移行実行
+        if ($needs_migration) {
+            $migration_data['ID'] = $post_id;
+            $result = wp_update_post($migration_data, true);
+            
+            if (!is_wp_error($result)) {
+                // 移行済みフラグを設定（重複移行防止）
+                update_post_meta($post_id, '_ofwn_migrated_to_post_fields', current_time('Y-m-d H:i:s'));
+                
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN] Successfully migrated legacy meta to post fields for CPT ID: ' . $post_id);
+                }
+            } else {
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN] Migration failed for CPT ID ' . $post_id . ': ' . $result->get_error_message());
+                }
             }
         }
     }

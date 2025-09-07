@@ -194,7 +194,8 @@ class OFWN_List_Table extends WP_List_Table {
                 'target_type'   => get_post_meta($pid, '_ofwn_target_type', true),
                 'target_id'     => get_post_meta($pid, '_ofwn_target_id', true),
                 'target_label'  => get_post_meta($pid, '_ofwn_target_label', true), // 旧データ互換用
-                'work_title'    => get_post_meta($pid, '_ofwn_work_title', true),
+                'work_title'    => get_post_field('post_title', $pid) ?: get_post_meta($pid, '_ofwn_work_title', true),
+                'work_content'  => get_post_field('post_content', $pid) ?: get_post_meta($pid, '_ofwn_work_content', true),
                 'author'        => get_the_author_meta('display_name', $p->post_author),
                 'edit_link'     => get_edit_post_link($pid),
             ];
