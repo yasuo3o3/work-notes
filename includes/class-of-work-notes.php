@@ -58,6 +58,9 @@ class OF_Work_Notes {
         // Gutenberg サイドバー用アセット読み込み
         if (is_admin()) {
             add_action('enqueue_block_editor_assets', [$this, 'enqueue_gutenberg_sidebar_assets']);
+            // 新規追加: 一覧画面のカスタマイズ
+            add_filter('manage_' . self::CPT . '_posts_columns', [$this, 'customize_list_columns']);
+            add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'display_custom_columns'], 10, 2);
         }
     }
 
@@ -351,6 +354,15 @@ class OF_Work_Notes {
             <input type="text" name="ofwn_target_label" value="<?php echo esc_attr($target_label);?>" style="width:100%;">
         </label></p>
 
+        <!-- 新規追加: 作業タイトルと作業内容 -->
+        <p><label><?php esc_html_e('作業タイトル', 'work-notes'); ?><br>
+            <input type="text" name="ofwn_work_title" value="<?php echo esc_attr(get_post_meta($post->ID, '_ofwn_work_title', true));?>" style="width:100%;">
+        </label></p>
+
+        <p><label><?php esc_html_e('作業内容', 'work-notes'); ?><br>
+            <textarea name="ofwn_work_content" style="width:100%; height:80px;"><?php echo esc_textarea(get_post_meta($post->ID, '_ofwn_work_content', true));?></textarea>
+        </label></p>
+
         <p><label><?php esc_html_e('依頼元', 'work-notes'); ?></label><br>
             <?php $this->render_select_with_custom('ofwn_requester', $req_opts, $requester, __('依頼元を手入力', 'work-notes')); ?>
         </p>
@@ -418,6 +430,18 @@ class OF_Work_Notes {
         $requester = $this->resolve_select_or_custom('ofwn_requester');
         $worker    = $this->resolve_select_or_custom('ofwn_worker');
 
+        // 新規追加: 作業タイトルと作業内容の処理
+        $work_title = isset($_POST['ofwn_work_title']) ? sanitize_text_field($_POST['ofwn_work_title']) : '';
+        $work_content = isset($_POST['ofwn_work_content']) ? sanitize_textarea_field($_POST['ofwn_work_content']) : '';
+        
+        // 作業内容が空の場合は作業タイトルをコピー
+        if (empty($work_content) && !empty($work_title)) {
+            $work_content = $work_title;
+            if ($debug_log) {
+                error_log('[OFWN] Auto-copied work_title to work_content: ' . $work_title);
+            }
+        }
+        
         $map = [
             '_ofwn_target_type'  => 'ofwn_target_type',
             '_ofwn_target_id'    => 'ofwn_target_id',
@@ -426,6 +450,8 @@ class OF_Work_Notes {
             '_ofwn_worker'       => $worker,
             '_ofwn_status'       => 'ofwn_status',
             '_ofwn_work_date'    => 'ofwn_work_date',
+            '_ofwn_work_title'   => $work_title,
+            '_ofwn_work_content' => $work_content,
         ];
         // 保存前のログ
         if ($debug_log) {
@@ -594,6 +620,27 @@ class OF_Work_Notes {
                 return current_user_can('edit_post', $post_id);
             },
             'sanitize_callback' => 'absint'
+        ]);
+        
+        // 新規追加: 作業タイトルと作業内容のメタフィールド
+        register_post_meta(self::CPT, '_ofwn_work_title', [
+            'show_in_rest' => true,
+            'single' => true,
+            'type' => 'string',
+            'auth_callback' => function($allowed, $meta_key, $post_id) {
+                return current_user_can('edit_post', $post_id);
+            },
+            'sanitize_callback' => 'sanitize_text_field'
+        ]);
+        
+        register_post_meta(self::CPT, '_ofwn_work_content', [
+            'show_in_rest' => true,
+            'single' => true,
+            'type' => 'string',
+            'auth_callback' => function($allowed, $meta_key, $post_id) {
+                return current_user_can('edit_post', $post_id);
+            },
+            'sanitize_callback' => 'sanitize_textarea_field'
         ]);
         
         $other_metas = [
@@ -768,7 +815,10 @@ class OF_Work_Notes {
         
         if (!$has_content) return;
         
-        // 重複防止のためのハッシュ生成
+        // 重複防止のためのハッシュ生成（新フィールドも含める）
+        $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+        $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        
         $meta_payload = [
             'target_type' => $target_type,
             'target_id' => $target_id,
@@ -776,7 +826,9 @@ class OF_Work_Notes {
             'requester' => $requester,
             'worker' => $worker,
             'status' => $status,
-            'work_date' => $work_date
+            'work_date' => $work_date,
+            'work_title' => $work_title,
+            'work_content' => $work_content
         ];
         $current_hash = md5(wp_json_encode($meta_payload));
         $last_hash = get_post_meta($post_id, '_ofwn_last_sync_hash', true);
@@ -1282,6 +1334,38 @@ class OF_Work_Notes {
                     esc_url($test_url)
                 )
             ]);
+        }
+    }
+    
+    /**
+     * 新規追加: 一覧画面のカラムカスタマイズ
+     * タイトル列を「作業タイトル」で表示
+     */
+    public function customize_list_columns($columns) {
+        // 既存のタイトル列を「作業タイトル」に変更
+        if (isset($columns['title'])) {
+            $columns['title'] = __('作業タイトル', 'work-notes');
+        }
+        return $columns;
+    }
+    
+    /**
+     * 新規追加: カスタムカラムの表示内容
+     * タイトル列で作業タイトルメタを表示
+     */
+    public function display_custom_columns($column_name, $post_id) {
+        if ($column_name === 'title') {
+            // 作業タイトルを取得
+            $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+            
+            if (!empty($work_title)) {
+                // 作業タイトルがある場合はそちらを表示
+                echo '<strong><a class="row-title" href="' . esc_url(get_edit_post_link($post_id)) . '">' . esc_html($work_title) . '</a></strong>';
+            } else {
+                // 作業タイトルが空の場合は既存のpost_titleをフォールバック表示
+                $post_title = get_the_title($post_id);
+                echo '<strong><a class="row-title" href="' . esc_url(get_edit_post_link($post_id)) . '">' . esc_html($post_title) . '</a></strong>';
+            }
         }
     }
 }

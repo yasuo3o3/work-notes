@@ -55,6 +55,9 @@
         const currentWorker = meta?._ofwn_worker || '';
         const currentStatus = meta?._ofwn_status || '依頼';
         const currentWorkDate = meta?._ofwn_work_date || new Date().toISOString().split('T')[0];
+        // 新規追加: 作業タイトルと作業内容
+        const currentWorkTitle = meta?._ofwn_work_title || '';
+        const currentWorkContent = meta?._ofwn_work_content || '';
         
         // メタ更新ヘルパー関数
         const updateMeta = function(key, value) {
@@ -266,6 +269,27 @@
                         value: currentWorkDate,
                         onChange: function(value) {
                             updateMeta('_ofwn_work_date', value);
+                        }
+                    }),
+                    
+                    // 新規追加: 作業タイトル
+                    e(TextControl, {
+                        label: __('作業タイトル', 'work-notes'),
+                        className: 'work-notes-field',
+                        value: currentWorkTitle,
+                        onChange: function(value) {
+                            updateMeta('_ofwn_work_title', value);
+                        }
+                    }),
+                    
+                    // 新規追加: 作業内容
+                    e(TextControl, {
+                        label: __('作業内容', 'work-notes'),
+                        className: 'work-notes-field',
+                        rows: 3,
+                        value: currentWorkContent,
+                        onChange: function(value) {
+                            updateMeta('_ofwn_work_content', value);
                         }
                     })
                 )
