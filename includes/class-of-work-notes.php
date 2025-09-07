@@ -623,25 +623,30 @@ class OF_Work_Notes {
         ]);
         
         // 新規追加: 作業タイトルと作業内容のメタフィールド
-        register_post_meta(self::CPT, '_ofwn_work_title', [
-            'show_in_rest' => true,
-            'single' => true,
-            'type' => 'string',
-            'auth_callback' => function($allowed, $meta_key, $post_id) {
-                return current_user_can('edit_post', $post_id);
-            },
-            'sanitize_callback' => 'sanitize_text_field'
-        ]);
+        // CPTだけでなくpost/pageにも登録してGutenbergサイドバーで使えるようにする
+        $work_meta_post_types = [self::CPT, 'post', 'page'];
         
-        register_post_meta(self::CPT, '_ofwn_work_content', [
-            'show_in_rest' => true,
-            'single' => true,
-            'type' => 'string',
-            'auth_callback' => function($allowed, $meta_key, $post_id) {
-                return current_user_can('edit_post', $post_id);
-            },
-            'sanitize_callback' => 'sanitize_textarea_field'
-        ]);
+        foreach ($work_meta_post_types as $post_type) {
+            register_post_meta($post_type, '_ofwn_work_title', [
+                'show_in_rest' => true,
+                'single' => true,
+                'type' => 'string',
+                'auth_callback' => function($allowed, $meta_key, $post_id) {
+                    return current_user_can('edit_post', $post_id);
+                },
+                'sanitize_callback' => 'sanitize_text_field'
+            ]);
+            
+            register_post_meta($post_type, '_ofwn_work_content', [
+                'show_in_rest' => true,
+                'single' => true,
+                'type' => 'string',
+                'auth_callback' => function($allowed, $meta_key, $post_id) {
+                    return current_user_can('edit_post', $post_id);
+                },
+                'sanitize_callback' => 'sanitize_textarea_field'
+            ]);
+        }
         
         $other_metas = [
             '_ofwn_target_type', '_ofwn_target_id', '_ofwn_target_label', 
@@ -809,9 +814,21 @@ class OF_Work_Notes {
         $status = get_post_meta($post_id, '_ofwn_status', true);
         $work_date = get_post_meta($post_id, '_ofwn_work_date', true);
         
-        // いずれかのフィールドが空でない場合のみ処理続行
+        // 新規追加: 作業タイトルと作業内容を取得
+        $work_title_check = get_post_meta($post_id, '_ofwn_work_title', true);
+        $work_content_check = get_post_meta($post_id, '_ofwn_work_content', true);
+        
+        // デバッグログ: post/page保存時のメタ情報
+        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            error_log('[OFWN] Processing post/page save - ID: ' . $post_id . ', Type: ' . $post->post_type);
+            error_log('[OFWN] Work title from post: "' . $work_title_check . '", Work content from post: "' . $work_content_check . '"');
+            error_log('[OFWN] Other meta - requester: "' . $requester . '", worker: "' . $worker . '", status: "' . $status . '"');
+        }
+        
+        // いずれかのフィールドが空でない場合のみ処理続行（新フィールドも含める）
         $has_content = !empty($target_type) || !empty($target_id) || !empty($target_label) || 
-                      !empty($requester) || !empty($worker) || !empty($status) || !empty($work_date);
+                      !empty($requester) || !empty($worker) || !empty($status) || !empty($work_date) ||
+                      !empty($work_title_check) || !empty($work_content_check);
         
         if (!$has_content) return;
         
@@ -860,15 +877,28 @@ class OF_Work_Notes {
             update_post_meta($note_id, '_ofwn_status', $status ?: '依頼');
             update_post_meta($note_id, '_ofwn_work_date', $work_date ?: current_time('Y-m-d'));
             
+            // 新規追加: 作業タイトルと作業内容をpost/pageからCPTへ転送
+            $work_title_from_post = get_post_meta($post_id, '_ofwn_work_title', true);
+            $work_content_from_post = get_post_meta($post_id, '_ofwn_work_content', true);
+            
+            // 作業内容が空の場合は作業タイトルをコピー
+            if (empty($work_content_from_post) && !empty($work_title_from_post)) {
+                $work_content_from_post = $work_title_from_post;
+            }
+            
+            update_post_meta($note_id, '_ofwn_work_title', $work_title_from_post);
+            update_post_meta($note_id, '_ofwn_work_content', $work_content_from_post);
+            
             // 正規リンク用メタフィールドを設定
             update_post_meta($note_id, '_ofwn_bound_post_id', $post_id);
             
             // 重複防止用ハッシュを親投稿に保存
             update_post_meta($post_id, '_ofwn_last_sync_hash', $current_hash);
             
-            // デバッグログ
+            // デバッグログ（新フィールド情報も含める）
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 error_log('[OFWN] Auto-created work note ID: ' . $note_id . ' for post ID: ' . $post_id);
+                error_log('[OFWN] Transferred work_title: "' . $work_title_from_post . '" work_content: "' . $work_content_from_post . '"');
             }
         }
     }
