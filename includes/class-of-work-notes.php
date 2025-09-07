@@ -428,18 +428,6 @@ class OF_Work_Notes {
         $requester = $this->resolve_select_or_custom('ofwn_requester');
         $worker    = $this->resolve_select_or_custom('ofwn_worker');
 
-        // 新規追加: 作業タイトルと作業内容の処理
-        $work_title = isset($_POST['ofwn_work_title']) ? sanitize_text_field($_POST['ofwn_work_title']) : '';
-        $work_content = isset($_POST['ofwn_work_content']) ? sanitize_textarea_field($_POST['ofwn_work_content']) : '';
-        
-        // 作業内容が空の場合は作業タイトルをコピー
-        if (empty($work_content) && !empty($work_title)) {
-            $work_content = $work_title;
-            if ($debug_log) {
-                error_log('[OFWN] Auto-copied work_title to work_content: ' . $work_title);
-            }
-        }
-        
         $map = [
             '_ofwn_target_type'  => 'ofwn_target_type',
             '_ofwn_target_id'    => 'ofwn_target_id',
@@ -448,9 +436,21 @@ class OF_Work_Notes {
             '_ofwn_worker'       => $worker,
             '_ofwn_status'       => 'ofwn_status',
             '_ofwn_work_date'    => 'ofwn_work_date',
-            '_ofwn_work_title'   => $work_title,
-            '_ofwn_work_content' => $work_content,
+            // 修正: 新フィールドを$_POSTキー名で指定し、他のフィールドと同じ処理フローに合わせる
+            '_ofwn_work_title'   => 'ofwn_work_title',
+            '_ofwn_work_content' => 'ofwn_work_content',
         ];
+        
+        // 作業内容が空で作業タイトルがある場合の自動コピー処理
+        $work_title_value = isset($_POST['ofwn_work_title']) ? sanitize_text_field($_POST['ofwn_work_title']) : '';
+        $work_content_value = isset($_POST['ofwn_work_content']) ? sanitize_textarea_field($_POST['ofwn_work_content']) : '';
+        
+        if (empty($work_content_value) && !empty($work_title_value)) {
+            $_POST['ofwn_work_content'] = $work_title_value; // $_POSTを更新して後続処理で使用
+            if ($debug_log) {
+                error_log('[OFWN] Auto-copied work_title to work_content: ' . $work_title_value);
+            }
+        }
         // 保存前のログ
         if ($debug_log) {
             error_log('[OFWN] Saving meta: requester=' . $requester . ', worker=' . $worker);
@@ -478,7 +478,11 @@ class OF_Work_Notes {
         if ($debug_log) {
             $saved_req = get_post_meta($post_id, '_ofwn_requester', true);
             $saved_worker = get_post_meta($post_id, '_ofwn_worker', true);
+            // 新フィールドの保存状態も確認
+            $saved_title = get_post_meta($post_id, '_ofwn_work_title', true);
+            $saved_content = get_post_meta($post_id, '_ofwn_work_content', true);
             error_log('[OFWN] Post-save verification: requester=' . $saved_req . ', worker=' . $saved_worker);
+            error_log('[OFWN] save_note_meta map resolved: title="' . $saved_title . '" content="' . $saved_content . '" for note ID=' . $post_id);
         }
 
         if (empty($_POST['post_title'])) {
@@ -590,11 +594,16 @@ class OF_Work_Notes {
         $target_post_types = ['post', 'page'];
         $all_meta_fields = [
             '_ofwn_requester', '_ofwn_worker', '_ofwn_target_type', 
-            '_ofwn_target_id', '_ofwn_target_label', '_ofwn_status', '_ofwn_work_date'
+            '_ofwn_target_id', '_ofwn_target_label', '_ofwn_status', '_ofwn_work_date',
+            // 修正: 新フィールドを追加してGutenbergサイドバーでREST API経由の保存を可能に
+            '_ofwn_work_title', '_ofwn_work_content'
         ];
         
         foreach ($target_post_types as $post_type) {
             foreach ($all_meta_fields as $meta_key) {
+                // 作業内容は複数行テキストなのでsanitize_textarea_fieldを使用
+                $sanitize_callback = ($meta_key === '_ofwn_work_content') ? 'sanitize_textarea_field' : 'sanitize_text_field';
+                
                 register_post_meta($post_type, $meta_key, [
                     'show_in_rest' => true,
                     'single' => true,
@@ -602,7 +611,7 @@ class OF_Work_Notes {
                     'auth_callback' => function($allowed, $meta_key, $post_id) {
                         return current_user_can('edit_post', $post_id);
                     },
-                    'sanitize_callback' => 'sanitize_text_field'
+                    'sanitize_callback' => $sanitize_callback
                 ]);
             }
         }
@@ -898,13 +907,22 @@ class OF_Work_Notes {
             $work_title_from_post = get_post_meta($post_id, '_ofwn_work_title', true);
             $work_content_from_post = get_post_meta($post_id, '_ofwn_work_content', true);
             
+            // CPT側の既存値を確認（上書き防止のため）
+            $existing_title = get_post_meta($note_id, '_ofwn_work_title', true);
+            $existing_content = get_post_meta($note_id, '_ofwn_work_content', true);
+            
             // 作業内容が空の場合は作業タイトルをコピー
             if (empty($work_content_from_post) && !empty($work_title_from_post)) {
                 $work_content_from_post = $work_title_from_post;
             }
             
-            update_post_meta($note_id, '_ofwn_work_title', $work_title_from_post);
-            update_post_meta($note_id, '_ofwn_work_content', $work_content_from_post);
+            // 空の場合のみ転送（既に値がある場合は上書きしない）
+            if (empty($existing_title)) {
+                update_post_meta($note_id, '_ofwn_work_title', $work_title_from_post);
+            }
+            if (empty($existing_content)) {
+                update_post_meta($note_id, '_ofwn_work_content', $work_content_from_post);
+            }
             
             // 正規リンク用メタフィールドを設定
             update_post_meta($note_id, '_ofwn_bound_post_id', $post_id);
@@ -915,7 +933,10 @@ class OF_Work_Notes {
             // デバッグログ（新フィールド情報も含める）
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 error_log('[OFWN] Auto-created work note ID: ' . $note_id . ' for post ID: ' . $post_id);
-                error_log('[OFWN] Transferred work_title: "' . $work_title_from_post . '" work_content: "' . $work_content_from_post . '"');
+                error_log('[OFWN] auto-create transfer: src post=' . $post_id . ' -> note=' . $note_id . ', title="' . $work_title_from_post . '", content="' . $work_content_from_post . '"');
+                if (!empty($existing_title) || !empty($existing_content)) {
+                    error_log('[OFWN] Transfer skipped: existing title="' . $existing_title . '", existing content="' . $existing_content . '"');
+                }
             }
         }
     }
