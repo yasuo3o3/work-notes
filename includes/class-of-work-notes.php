@@ -872,6 +872,41 @@ class OF_Work_Notes {
         
         if (!$has_content) return;
         
+        // 段階2: REST APIリクエスト時のメタ準備完了検証
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            // 作業タイトル・作業内容が入力されているのにメタが空の場合は保留
+            $work_title_empty = empty($work_title_check);
+            $work_content_empty = empty($work_content_check);
+            
+            // REST経由でのメタ保存が完了していない可能性をチェック
+            if ($work_title_empty && $work_content_empty) {
+                // 他のメタフィールドもチェック（完全に空の場合は次回保存で処理）
+                $other_meta_empty = empty($requester) && empty($worker) && empty($status);
+                
+                if ($other_meta_empty) {
+                    if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                        error_log('[OFWN] REST request with empty work meta detected, marking for retry on post ' . $post_id);
+                    }
+                    
+                    // 次回save_postで再処理するためのフラグを設定
+                    update_post_meta($post_id, '_ofwn_pending_cpt_creation', 1);
+                    return;
+                }
+            } else {
+                // 正常にメタがある場合はフラグを削除
+                delete_post_meta($post_id, '_ofwn_pending_cpt_creation');
+            }
+        }
+        
+        // フラグがある場合の再処理ロジック
+        $pending_flag = get_post_meta($post_id, '_ofwn_pending_cpt_creation', true);
+        if ($pending_flag) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] Processing delayed CPT creation for post ' . $post_id);
+            }
+            delete_post_meta($post_id, '_ofwn_pending_cpt_creation');
+        }
+        
         // 重複防止のためのハッシュ生成（新フィールドも含める）
         $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
         $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
