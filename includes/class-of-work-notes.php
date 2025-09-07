@@ -371,15 +371,15 @@ class OF_Work_Notes {
             <textarea name="ofwn_work_content" style="width:100%; height:80px;"><?php echo esc_textarea(get_post_meta($post->ID, '_ofwn_work_content', true));?></textarea>
         </label></p>
 
-        <p><label><?php esc_html_e('依頼元', 'work-notes'); ?></label><br>
+        <p class="ofwn-inline"><label><?php esc_html_e('依頼元', 'work-notes'); ?></label><br>
             <?php $this->render_select_with_custom('ofwn_requester', $req_opts, $requester, __('依頼元を手入力', 'work-notes')); ?>
         </p>
 
-        <p><label><?php esc_html_e('担当者', 'work-notes'); ?></label><br>
+        <p class="ofwn-inline"><label><?php esc_html_e('担当者', 'work-notes'); ?></label><br>
             <?php $this->render_select_with_custom('ofwn_worker', $wrk_opts, $worker, __('担当者を手入力', 'work-notes')); ?>
         </p>
 
-        <p><label><?php esc_html_e('ステータス', 'work-notes'); ?><br>
+        <p class="ofwn-inline"><label><?php esc_html_e('ステータス', 'work-notes'); ?><br>
             <select name="ofwn_status">
                 <option value="依頼" <?php selected($status,'依頼');?>><?php esc_html_e('依頼', 'work-notes'); ?></option>
                 <option value="対応中" <?php selected($status,'対応中');?>><?php esc_html_e('対応中', 'work-notes'); ?></option>
@@ -387,7 +387,7 @@ class OF_Work_Notes {
             </select>
         </label></p>
 
-        <p><label><?php esc_html_e('実施日', 'work-notes'); ?><br>
+        <p class="ofwn-inline"><label><?php esc_html_e('実施日', 'work-notes'); ?><br>
             <input type="date" name="ofwn_work_date" value="<?php echo esc_attr($date);?>">
         </label></p>
         <?php

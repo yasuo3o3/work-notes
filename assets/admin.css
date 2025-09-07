@@ -24,3 +24,46 @@
     overflow-y: auto;
     resize: vertical;
 }
+
+/* メタボックス内の横並びレイアウト：依頼元・担当者・ステータス・実施日の4項目のみ */
+#ofwn_fields .ofwn-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+#ofwn_fields .ofwn-inline label {
+    min-width: 72px;
+    font-weight: 600;
+    flex-shrink: 0;
+    margin-bottom: 0;
+}
+
+#ofwn_fields .ofwn-inline select,
+#ofwn_fields .ofwn-inline input[type="date"] {
+    flex: 1 1 auto;
+    max-width: none;
+}
+
+#ofwn_fields .ofwn-inline br {
+    display: none;
+}
+
+/* モバイル対応：480px未満では縦並びに戻す */
+@media (max-width: 480px) {
+    #ofwn_fields .ofwn-inline {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+    
+    #ofwn_fields .ofwn-inline label {
+        min-width: unset;
+        margin-bottom: 6px;
+    }
+    
+    #ofwn_fields .ofwn-inline br {
+        display: block;
+    }
+}

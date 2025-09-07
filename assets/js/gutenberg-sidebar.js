@@ -187,7 +187,7 @@
                     // 依頼元
                     e(SelectControl, {
                         label: __('依頼元', 'work-notes'),
-                        className: 'work-notes-field',
+                        className: 'work-notes-field ofwn-inline',
                         value: requesterSelectOptions.find(opt => opt.value === currentRequester) ? currentRequester : '__custom__',
                         options: requesterSelectOptions,
                         onChange: function(value) {
@@ -213,7 +213,7 @@
                     // 担当者
                     e(SelectControl, {
                         label: __('担当者', 'work-notes'),
-                        className: 'work-notes-field',
+                        className: 'work-notes-field ofwn-inline',
                         value: workerSelectOptions.find(opt => opt.value === currentWorker) ? currentWorker : '__custom__',
                         options: workerSelectOptions,
                         onChange: function(value) {
@@ -239,7 +239,7 @@
                     // ステータス
                     e(SelectControl, {
                         label: __('ステータス', 'work-notes'),
-                        className: 'work-notes-field',
+                        className: 'work-notes-field ofwn-inline',
                         value: currentStatus,
                         options: [
                             { label: __('依頼', 'work-notes'), value: '依頼' },
@@ -254,7 +254,7 @@
                     // 実施日
                     e(TextControl, {
                         label: __('実施日', 'work-notes'),
-                        className: 'work-notes-field',
+                        className: 'work-notes-field ofwn-inline',
                         type: 'date',
                         value: currentWorkDate,
                         onChange: function(value) {

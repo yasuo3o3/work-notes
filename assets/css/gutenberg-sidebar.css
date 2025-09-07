@@ -81,3 +81,40 @@
     border-color: #0073aa;
     box-shadow: 0 0 0 1px #0073aa;
 }
+
+/* 横並びレイアウト：依頼元・担当者・ステータス・実施日の4項目のみ */
+.work-notes-post-status-info .ofwn-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.work-notes-post-status-info .ofwn-inline .components-base-control__label {
+    min-width: 72px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.work-notes-post-status-info .ofwn-inline .components-base-control__field {
+    flex: 1 1 auto;
+}
+
+.work-notes-post-status-info .ofwn-inline .components-select-control,
+.work-notes-post-status-info .ofwn-inline .components-text-control {
+    flex: 1 1 auto;
+    margin-bottom: 0;
+}
+
+/* モバイル対応：480px未満では縦並びに戻す */
+@media (max-width: 480px) {
+    .work-notes-post-status-info .ofwn-inline {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+    
+    .work-notes-post-status-info .ofwn-inline .components-base-control__label {
+        min-width: unset;
+        margin-bottom: 6px;
+    }
+}
