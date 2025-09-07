@@ -58,9 +58,7 @@ class OF_Work_Notes {
         // Gutenberg サイドバー用アセット読み込み
         if (is_admin()) {
             add_action('enqueue_block_editor_assets', [$this, 'enqueue_gutenberg_sidebar_assets']);
-            // 新規追加: 一覧画面のカスタマイズ
-            add_filter('manage_' . self::CPT . '_posts_columns', [$this, 'customize_list_columns']);
-            add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'display_custom_columns'], 10, 2);
+            // 一覧画面のカスタマイズは既存のcolsとcol_contentメソッドで実装済み
         }
     }
 
@@ -505,6 +503,9 @@ class OF_Work_Notes {
         $new = [];
         $new['cb'] = $cols['cb'] ?? '';
         $new['title'] = __('タイトル', 'work-notes');
+        // 新規追加: 作業タイトルと作業内容列をタイトル列の直後に追加
+        $new['work_title'] = __('作業タイトル', 'work-notes');
+        $new['work_content'] = __('作業内容', 'work-notes');
         $new['ofwn_requester'] = '依頼元';
         $new['ofwn_assignee'] = '担当者';
         $new['ofwn_target'] = '対象';
@@ -515,6 +516,22 @@ class OF_Work_Notes {
     }
 
     public function col_content($col, $post_id) {
+        // 新規追加: 作業タイトル列の表示処理
+        if ($col === 'work_title') {
+            $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+            echo esc_html($work_title ?: __('データなし', 'work-notes'));
+        }
+        // 新規追加: 作業内容列の表示処理
+        if ($col === 'work_content') {
+            $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+            // 長い内容は省略表示し、空の場合は'データなし'を表示
+            if (!empty($work_content)) {
+                $truncated_content = mb_strlen($work_content) > 50 ? mb_substr($work_content, 0, 47) . '...' : $work_content;
+                echo esc_html($truncated_content);
+            } else {
+                echo esc_html(__('データなし', 'work-notes'));
+            }
+        }
         if ($col === 'ofwn_requester') {
             $requester = $this->get_meta($post_id, '_ofwn_requester');
             echo esc_html($requester ?: '—');
@@ -1367,35 +1384,4 @@ class OF_Work_Notes {
         }
     }
     
-    /**
-     * 新規追加: 一覧画面のカラムカスタマイズ
-     * タイトル列を「作業タイトル」で表示
-     */
-    public function customize_list_columns($columns) {
-        // 既存のタイトル列を「作業タイトル」に変更
-        if (isset($columns['title'])) {
-            $columns['title'] = __('作業タイトル', 'work-notes');
-        }
-        return $columns;
-    }
-    
-    /**
-     * 新規追加: カスタムカラムの表示内容
-     * タイトル列で作業タイトルメタを表示
-     */
-    public function display_custom_columns($column_name, $post_id) {
-        if ($column_name === 'title') {
-            // 作業タイトルを取得
-            $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
-            
-            if (!empty($work_title)) {
-                // 作業タイトルがある場合はそちらを表示
-                echo '<strong><a class="row-title" href="' . esc_url(get_edit_post_link($post_id)) . '">' . esc_html($work_title) . '</a></strong>';
-            } else {
-                // 作業タイトルが空の場合は既存のpost_titleをフォールバック表示
-                $post_title = get_the_title($post_id);
-                echo '<strong><a class="row-title" href="' . esc_url(get_edit_post_link($post_id)) . '">' . esc_html($post_title) . '</a></strong>';
-            }
-        }
-    }
 }
