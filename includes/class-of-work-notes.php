@@ -35,6 +35,9 @@ class OF_Work_Notes {
         // Step B: wp_after_insert_postでのバックアップCPT作成（save_postで失敗した場合の保険）
         add_action('wp_after_insert_post', [$this, 'fallback_create_work_note_from_meta'], 30, 4);
         
+        // Phase 1: CPT削除時の親投稿メタデータクリーンアップ
+        add_action('before_delete_post', [$this, 'cleanup_parent_meta_on_cpt_delete']);
+        
         add_filter('manage_edit-' . self::CPT . '_columns', [$this, 'cols']);
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'col_content'], 10, 2);
         add_filter('manage_edit-' . self::CPT . '_sortable_columns', [$this, 'sortable_cols']);
@@ -1170,14 +1173,26 @@ class OF_Work_Notes {
                 $note_id = false;
             }
         } else {
-            // 新規CPTを作成
+            // Phase 1: 新規CPTを作成（安定化強化）
             $note_id = wp_insert_post([
                 'post_type' => self::CPT,
                 'post_status' => 'publish',
                 'post_title' => $note_title,
                 'post_content' => $note_content,
                 'post_author' => get_current_user_id(),
+                'post_date' => current_time('mysql'),
+                'post_date_gmt' => gmdate('Y-m-d H:i:s'),
             ], true);
+            
+            // Phase 1: 新規作成後の確実なキャッシュクリア
+            if (!is_wp_error($note_id) && $note_id) {
+                clean_post_cache($note_id);
+                clean_post_cache($post_id);
+                
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN PHASE1] CPT created successfully: id=' . $note_id . ' title="' . $note_title . '"');
+                }
+            }
         }
         
         if (!is_wp_error($note_id) && $note_id) {
@@ -1979,6 +1994,44 @@ class OF_Work_Notes {
                     error_log('[OFWN] Migration failed for CPT ID ' . $post_id . ': ' . $result->get_error_message());
                 }
             }
+        }
+    }
+    
+    /**
+     * Phase 1: CPT削除時の親投稿メタデータクリーンアップ
+     * CPTを削除したらサイドメニューからも消えるようにする
+     */
+    public function cleanup_parent_meta_on_cpt_delete($post_id) {
+        // of_work_note タイプの投稿のみ対象
+        if (get_post_type($post_id) !== self::CPT) {
+            return;
+        }
+        
+        // 親投稿IDを取得
+        $parent_id = get_post_meta($post_id, '_ofwn_bound_post_id', true);
+        if (!$parent_id) {
+            return;
+        }
+        
+        // Phase 1: 親投稿の関連メタデータを削除（サイドメニューからクリア）
+        $deleted_metas = [];
+        $meta_keys = [
+            '_ofwn_work_title',
+            '_ofwn_work_content',
+            '_ofwn_last_sync_hash'
+        ];
+        
+        foreach ($meta_keys as $meta_key) {
+            if (delete_post_meta($parent_id, $meta_key)) {
+                $deleted_metas[] = $meta_key;
+            }
+        }
+        
+        // Phase 1: 親投稿のキャッシュクリア
+        clean_post_cache($parent_id);
+        
+        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            error_log('[OFWN PHASE1] CPT deletion cleanup: post=' . $post_id . ' parent=' . $parent_id . ' cleared_metas=' . implode(',', $deleted_metas));
         }
     }
     
