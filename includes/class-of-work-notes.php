@@ -865,11 +865,15 @@ class OF_Work_Notes {
             return;
         }
         
-        // RESTリクエスト時は$_POST['meta']から最新値を優先取得
+        // 最新値取得の強化：RESTリクエスト時は$_POST['meta']を優先、通常時は強制キャッシュクリア
         $is_rest_request = defined('REST_REQUEST') && REST_REQUEST;
         
+        // 全ての場合でキャッシュクリアを実行（最新値取得のため）
+        wp_cache_delete($post_id, 'post_meta');
+        clean_post_cache($post_id);
+        
         if ($is_rest_request && isset($_POST['meta'])) {
-            // RESTリクエスト時：$_POST['meta']から直接最新値を取得
+            // RESTリクエスト時：$_POST['meta']から直接最新値を取得（最優先）
             $target_type = $_POST['meta']['_ofwn_target_type'] ?? get_post_meta($post_id, '_ofwn_target_type', true);
             $target_id = $_POST['meta']['_ofwn_target_id'] ?? get_post_meta($post_id, '_ofwn_target_id', true);
             $target_label = $_POST['meta']['_ofwn_target_label'] ?? get_post_meta($post_id, '_ofwn_target_label', true);
@@ -880,12 +884,7 @@ class OF_Work_Notes {
             $work_title_check = $_POST['meta']['_ofwn_work_title'] ?? '';
             $work_content_check = $_POST['meta']['_ofwn_work_content'] ?? '';
         } else {
-            // 通常のリクエスト時：メタデータから取得（キャッシュクリア後）
-            if ($is_rest_request) {
-                wp_cache_delete($post_id, 'post_meta');
-                clean_post_cache($post_id);
-            }
-            
+            // 通常のリクエスト時：強制キャッシュクリア後にメタデータ取得
             $target_type = get_post_meta($post_id, '_ofwn_target_type', true);
             $target_id = get_post_meta($post_id, '_ofwn_target_id', true);
             $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
@@ -1183,8 +1182,8 @@ class OF_Work_Notes {
                 // 全体キャッシュクリア（一覧への即時反映担保）
                 wp_cache_delete('last_changed', 'posts');
                 
-                // 重複防止フラグを設定（5秒間有効）
-                set_transient('ofwn_recent_create_' . $post_id, 1, 5);
+                // 重複防止フラグを設定（1秒間有効・テスト用に短縮）
+                set_transient('ofwn_recent_create_' . $post_id, 1, 1);
                 
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                     error_log('[OFWN] hash synced successfully: ' . substr($current_hash, 0, 8));
@@ -2175,8 +2174,8 @@ class OF_Work_Notes {
             update_post_meta($post_id, '_ofwn_bound_cpt_ids', $existing_cpt_ids);
             update_post_meta($post_id, '_ofwn_bound_cpt_id', $note_id);
             
-            // 重複防止フラグを設定（5秒間有効）
-            set_transient('ofwn_recent_create_' . $post_id, 1, 5);
+            // 重複防止フラグを設定（1秒間有効・テスト用に短縮）
+            set_transient('ofwn_recent_create_' . $post_id, 1, 1);
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 error_log('[OFWN FINAL_CREATE] SUCCESS: Created CPT ' . $note_id . ' with title: "' . $note_title . '"');
