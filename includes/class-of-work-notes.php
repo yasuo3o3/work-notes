@@ -23,17 +23,17 @@ class OF_Work_Notes {
         // Gutenberg対応: 投稿/固定ページ保存時にメタデータから作業メモCPT自動生成
         // タイミング調査用: 優先度の異なるフックを追加
         add_action('save_post_post', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 99, 2);
+        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 50, 2);
         add_action('save_post_post', [$this, 'debug_save_timing_late'], 100, 2);
         add_action('save_post_page', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 99, 2);
+        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 50, 2);
         add_action('save_post_page', [$this, 'debug_save_timing_late'], 100, 2);
         
         // 代替フック調査用
         add_action('wp_after_insert_post', [$this, 'debug_after_insert_post'], 10, 4);
         
         // Step B: wp_after_insert_postでのバックアップCPT作成（save_postで失敗した場合の保険）
-        add_action('wp_after_insert_post', [$this, 'fallback_create_work_note_from_meta'], 20, 4);
+        add_action('wp_after_insert_post', [$this, 'fallback_create_work_note_from_meta'], 30, 4);
         
         add_filter('manage_edit-' . self::CPT . '_columns', [$this, 'cols']);
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'col_content'], 10, 2);
@@ -862,14 +862,37 @@ class OF_Work_Notes {
             $current_action = current_action();
             $doing_autosave = defined('DOING_AUTOSAVE') && DOING_AUTOSAVE ? 'true' : 'false';
             $is_rest = defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false';
-            error_log('[OFWN TIMING] Processing post/page save - ID: ' . $post_id . ', Type: ' . $post->post_type . ', Action: ' . $current_action . ', Autosave: ' . $doing_autosave . ', REST: ' . $is_rest);
-            error_log('[OFWN TIMING] Work title from post: "' . $work_title_check . '", Work content from post: "' . $work_content_check . '"');
-            error_log('[OFWN TIMING] Other meta - requester: "' . $requester . '", worker: "' . $worker . '", status: "' . $status . '"');
+            $is_revision = wp_is_post_revision($post_id) ? 'true' : 'false';
+            $can_edit = current_user_can('edit_post', $post_id) ? 'true' : 'false';
+            $post_status = get_post_status($post_id);
+            
+            error_log('[OFWN SAVE_ANALYSIS] === 保存処理開始 ===');
+            error_log('[OFWN SAVE_ANALYSIS] Post ID: ' . $post_id . ', Type: ' . $post->post_type . ', Status: ' . $post_status);
+            error_log('[OFWN SAVE_ANALYSIS] Context: Action=' . $current_action . ', Autosave=' . $doing_autosave . ', REST=' . $is_rest . ', Revision=' . $is_revision . ', CanEdit=' . $can_edit);
+            error_log('[OFWN SAVE_ANALYSIS] Work meta: title="' . $work_title_check . '", content="' . $work_content_check . '"');
+            error_log('[OFWN SAVE_ANALYSIS] Other meta: requester="' . $requester . '", worker="' . $worker . '", status="' . $status . '"');
             
             // RESTリクエストのメタデータを確認
             if ($is_rest && isset($_POST['meta'])) {
                 $rest_meta = $_POST['meta'];
-                error_log('[OFWN TIMING] REST meta received: ' . json_encode($rest_meta));
+                error_log('[OFWN SAVE_ANALYSIS] REST meta received: ' . json_encode($rest_meta));
+            }
+            
+            // 既存CPTの確認
+            $existing_notes = get_posts([
+                'post_type' => self::CPT,
+                'posts_per_page' => 1,
+                'meta_query' => [
+                    [
+                        'key' => '_ofwn_bound_post_id',
+                        'value' => $post_id,
+                        'compare' => '='
+                    ]
+                ]
+            ]);
+            error_log('[OFWN SAVE_ANALYSIS] Existing CPT count for this post: ' . count($existing_notes));
+            if (!empty($existing_notes)) {
+                error_log('[OFWN SAVE_ANALYSIS] Existing CPT ID: ' . $existing_notes[0]->ID . ', Title: "' . $existing_notes[0]->post_title . '"');
             }
         }
         
@@ -878,7 +901,12 @@ class OF_Work_Notes {
                       !empty($requester) || !empty($worker) || !empty($status) || !empty($work_date) ||
                       !empty($work_title_check) || !empty($work_content_check);
         
-        if (!$has_content) return;
+        if (!$has_content) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN SAVE_ANALYSIS] SKIP: No content detected in any fields');
+            }
+            return;
+        }
         
         // 段階2: REST APIリクエスト時のメタ準備完了検証
         if (defined('REST_REQUEST') && REST_REQUEST) {
@@ -893,7 +921,7 @@ class OF_Work_Notes {
                 
                 if ($other_meta_empty) {
                     if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                        error_log('[OFWN] REST request with empty work meta detected, marking for retry on post ' . $post_id);
+                        error_log('[OFWN SAVE_ANALYSIS] SKIP: REST request with empty work meta detected, flagging for retry on post ' . $post_id);
                     }
                     
                     // 次回save_postで再処理するためのフラグを設定
@@ -903,6 +931,9 @@ class OF_Work_Notes {
             } else {
                 // 正常にメタがある場合はフラグを削除
                 delete_post_meta($post_id, '_ofwn_pending_cpt_creation');
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN SAVE_ANALYSIS] REST meta valid, clearing retry flag');
+                }
             }
         }
         
@@ -910,7 +941,7 @@ class OF_Work_Notes {
         $pending_flag = get_post_meta($post_id, '_ofwn_pending_cpt_creation', true);
         if ($pending_flag) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] Processing delayed CPT creation for post ' . $post_id);
+                error_log('[OFWN SAVE_ANALYSIS] Processing delayed CPT creation for post ' . $post_id);
             }
             delete_post_meta($post_id, '_ofwn_pending_cpt_creation');
         }
@@ -933,12 +964,36 @@ class OF_Work_Notes {
         $current_hash = md5(wp_json_encode($meta_payload));
         $last_hash = get_post_meta($post_id, '_ofwn_last_sync_hash', true);
         
-        // ハッシュが同じなら重複防止でスキップ
-        if ($current_hash === $last_hash) {
+        // 既存CPTの確認（初回作成時の判定緩和用）
+        $existing_notes = get_posts([
+            'post_type' => self::CPT,
+            'posts_per_page' => 1,
+            'meta_query' => [
+                [
+                    'key' => '_ofwn_bound_post_id',
+                    'value' => $post_id,
+                    'compare' => '='
+                ]
+            ]
+        ]);
+        $is_first_creation = empty($existing_notes);
+        
+        // ハッシュが同じなら重複防止でスキップ（ただし初回作成は除く）
+        if (!$is_first_creation && $current_hash === $last_hash) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN SAVE_ANALYSIS] SKIP: Hash unchanged (not first creation) - current: ' . substr($current_hash, 0, 8) . ', last: ' . substr($last_hash, 0, 8));
+            }
             return;
+        } else {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                $reason = $is_first_creation ? 'first creation' : 'hash changed';
+                error_log('[OFWN SAVE_ANALYSIS] Proceeding with CPT creation/update: ' . $reason);
+                error_log('[OFWN SAVE_ANALYSIS] Hash - current: ' . substr($current_hash, 0, 8) . ', last: ' . substr($last_hash ?: 'none', 0, 8));
+                error_log('[OFWN SAVE_ANALYSIS] Hash payload: ' . wp_json_encode($meta_payload));
+            }
         }
         
-        // 作業メモCPTを作成（実データを直接post_title/post_contentに保存）
+        // 作業メモCPT作成または更新処理
         $user_work_title = $work_title ?: $target_label ?: '';
         $user_work_content = $work_content ?: '';
         
@@ -946,36 +1001,64 @@ class OF_Work_Notes {
         if (!empty($user_work_title)) {
             $note_title = sanitize_text_field($user_work_title);
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] Using user work_title as post_title: ' . $note_title);
+                error_log('[OFWN SAVE_ANALYSIS] Using user work_title as post_title: ' . $note_title);
             }
         } else {
             $note_title = '作業メモ ' . current_time('Y-m-d H:i');
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] No work_title found, using fallback: ' . $note_title);
+                error_log('[OFWN SAVE_ANALYSIS] No work_title found, using fallback: ' . $note_title);
             }
         }
         
         if (!empty($user_work_content)) {
             $note_content = wp_kses_post($user_work_content);
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] Using user work_content as post_content');
+                error_log('[OFWN SAVE_ANALYSIS] Using user work_content as post_content');
             }
         } else {
             $note_content = $this->generate_work_note_content($meta_payload, $post);
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] No work_content found, using generated content');
+                error_log('[OFWN SAVE_ANALYSIS] No work_content found, using generated content');
             }
         }
         
-        $note_id = wp_insert_post([
-            'post_type' => self::CPT,
-            'post_status' => 'publish',
-            'post_title' => $note_title,
-            'post_content' => $note_content,
-            'post_author' => get_current_user_id(),
-        ], true);
+        // 既存CPTがある場合は更新、ない場合は新規作成
+        if (!$is_first_creation && !empty($existing_notes)) {
+            // 既存CPTを更新
+            $note_id = $existing_notes[0]->ID;
+            $updated_post = wp_update_post([
+                'ID' => $note_id,
+                'post_title' => $note_title,
+                'post_content' => $note_content,
+            ], true);
+            
+            if (!is_wp_error($updated_post)) {
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN SAVE_ANALYSIS] === CPT更新成功 === ID: ' . $note_id . ', Title: "' . $note_title . '"');
+                }
+            } else {
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN SAVE_ANALYSIS] CPT更新失敗: ' . $updated_post->get_error_message());
+                }
+                $note_id = false;
+            }
+        } else {
+            // 新規CPTを作成
+            $note_id = wp_insert_post([
+                'post_type' => self::CPT,
+                'post_status' => 'publish',
+                'post_title' => $note_title,
+                'post_content' => $note_content,
+                'post_author' => get_current_user_id(),
+            ], true);
+        }
         
         if (!is_wp_error($note_id) && $note_id) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                $action = $is_first_creation ? 'CPT作成成功' : 'CPT更新成功';
+                error_log('[OFWN SAVE_ANALYSIS] === ' . $action . ' === ID: ' . $note_id . ', Title: "' . $note_title . '"');
+            }
+            
             // 作業メモCPTにメタデータを設定
             update_post_meta($note_id, '_ofwn_target_type', $target_type ?: 'post');
             update_post_meta($note_id, '_ofwn_target_id', (string)$post_id);
@@ -987,7 +1070,7 @@ class OF_Work_Notes {
             
             // 旧処理：CPTへのメタフィールド転送は不要（post_title/post_contentに直接保存済み）
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] CPT created with direct post_title/post_content - no meta transfer needed');
+                error_log('[OFWN SAVE_ANALYSIS] CPT created with direct post_title/post_content - no meta transfer needed');
             }
             
             // 正規リンク用メタフィールドを設定
