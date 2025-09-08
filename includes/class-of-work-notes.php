@@ -985,10 +985,46 @@ class OF_Work_Notes {
         }
         
         if (!$is_first_creation && $current_hash === $last_hash) {
-            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] SKIP: Hash unchanged (not first creation)');
+            // ハッシュ一致でも実体が不一致なら強制更新にフォールバック
+            $note_id = !empty($existing_notes) ? $existing_notes[0]->ID : 0;
+            $need_force_update = false;
+            
+            if ($note_id) {
+                // 最終的な値を先に算出
+                $user_work_title = $work_title ?: $target_label ?: '';
+                $user_work_content = $work_content ?: '';
+                
+                $final_note_title = !empty($user_work_title) 
+                    ? sanitize_text_field($user_work_title)
+                    : '作業メモ ' . current_time('Y-m-d H:i');
+                $final_note_content = !empty($user_work_content) 
+                    ? wp_kses_post($user_work_content)
+                    : $this->generate_work_note_content($meta_payload, $post);
+                
+                // 既存CPTの実体をチェック
+                $cpt_title = get_post_field('post_title', $note_id);
+                $cpt_content = get_post_field('post_content', $note_id);
+                $need_force_update = ($cpt_title !== $final_note_title) || ($cpt_content !== $final_note_content);
+                
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    $title_match = $cpt_title === $final_note_title ? 'match' : 'diff';
+                    $content_match = $cpt_content === $final_note_content ? 'match' : 'diff';
+                    error_log('[OFWN] content-check: title=' . $title_match . ' content=' . $content_match . ' force_update=' . ($need_force_update ? 'true' : 'false'));
+                }
             }
-            return;
+            
+            if (!$need_force_update) {
+                // 本当に反映済み → スキップ
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN SAVE_ANALYSIS] SKIP: Hash unchanged and content matches');
+                }
+                return;
+            } else {
+                // 実体不一致 → このまま更新フローへ
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN SAVE_ANALYSIS] Force update: Hash same but content differs');
+                }
+            }
         } else {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 $reason = $is_first_creation ? 'first creation' : 'hash changed';
@@ -1032,19 +1068,23 @@ class OF_Work_Notes {
             $current_time = current_time('mysql');
             $current_time_gmt = current_time('mysql', 1);
             
+            $now = current_time('mysql');
+            $nowg = gmdate('Y-m-d H:i:s');
+            
             $updated_post = wp_update_post([
                 'ID' => $note_id,
                 'post_title' => $note_title,
                 'post_content' => $note_content,
-                'post_date' => $current_time,
-                'post_date_gmt' => $current_time_gmt,
-                'post_modified' => $current_time,
-                'post_modified_gmt' => $current_time_gmt,
+                'post_date' => $now,
+                'post_date_gmt' => $nowg,
+                'edit_date' => true, // post_modifiedも更新
             ], true);
             
             if (!is_wp_error($updated_post)) {
+                // キャッシュクリアを即座に実行
+                clean_post_cache($note_id);
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN] updated note id=' . $note_id . ' title="' . $note_title . '" date=' . $current_time . ' reason=meta_changed');
+                    error_log('[OFWN] updated note id=' . $note_id . ' title="' . $note_title . '" date=' . $now . ' reason=meta_changed');
                 }
             } else {
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
@@ -1086,15 +1126,20 @@ class OF_Work_Notes {
             // 正規リンク用メタフィールドを設定
             update_post_meta($note_id, '_ofwn_bound_post_id', $post_id);
             
-            // 重複防止用ハッシュを親投稿に保存
-            $hash_sync_result = update_post_meta($post_id, '_ofwn_last_sync_hash', $current_hash);
-            if (!$hash_sync_result && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] hash-sync failed for post ' . $post_id);
+            // 重複防止用ハッシュをCPT更新成功後に1回のみ更新
+            if (!is_wp_error($note_id) && $note_id) {
+                $hash_sync_result = update_post_meta($post_id, '_ofwn_last_sync_hash', $current_hash);
+                if (!$hash_sync_result && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN] hash-sync failed for post ' . $post_id);
+                }
+                
+                // 全体キャッシュクリア（一覧への即時反映担保）
+                wp_cache_delete('last_changed', 'posts');
+                
+                if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    error_log('[OFWN] hash synced successfully: ' . substr($current_hash, 0, 8));
+                }
             }
-            
-            // キャッシュクリア処理（一覧への即時反映担保）
-            clean_post_cache($note_id);
-            wp_cache_delete('last_changed', 'posts');
             
             // 並び戦略をログ出力（案A採用を明記）
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG && !get_transient('ofwn_strategy_logged')) {
