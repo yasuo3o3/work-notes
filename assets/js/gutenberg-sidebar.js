@@ -19,7 +19,7 @@
     const { useEntityProp } = wp.coreData;
     const { registerPlugin } = wp.plugins;
     const { __ } = wp.i18n;
-    const { useState } = wp.element;
+    const { useState, useEffect } = wp.element;
     
     // 作業メモサイドバーコンポーネント
     function WorkNotesPanel() {
@@ -44,21 +44,116 @@
         const [prefillApplied, setPrefillApplied] = useState(false);
         const [backfillProcessed, setBackfillProcessed] = useState(false);
         
-        // メタフィールドのフック（個別にフック）
+        // Phase 2: CPT直接アクセス用のhooks
+        const { getEntityRecord, editEntityRecord, saveEntityRecord } = useDispatch('core');
+        
+        // Phase 2: 親投稿のメタデータから _ofwn_bound_cpt_id を取得
         const [meta, setMeta] = useEntityProp('postType', postType, 'meta', postId);
+        const boundCptId = meta?._ofwn_bound_cpt_id;
         
-        // 現在の値を取得（未定義の場合はデフォルト値を設定）
-        const currentTargetType = meta?._ofwn_target_type || '';
-        const currentTargetId = meta?._ofwn_target_id || '';
-        const currentRequester = meta?._ofwn_requester || '';
-        const currentWorker = meta?._ofwn_worker || '';
-        const currentStatus = meta?._ofwn_status || '依頼';
-        const currentWorkDate = meta?._ofwn_work_date || new Date().toISOString().split('T')[0];
-        // 統合された作業タイトル（対象ラベルからの移行を含む）
-        const currentWorkTitle = meta?._ofwn_work_title || meta?._ofwn_target_label || '';
-        const currentWorkContent = meta?._ofwn_work_content || '';
+        // Phase 2: CPT直接取得
+        const workNote = useSelect(
+            (select) => {
+                if (!boundCptId) return null;
+                return select('core').getEntityRecord('postType', 'of_work_note', boundCptId);
+            },
+            [boundCptId]
+        );
         
-        // メタ更新ヘルパー関数
+        // Phase 2: CPT作成・保存処理の状態管理
+        const [isCreatingCpt, setIsCreatingCpt] = useState(false);
+        const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+        
+        // Phase 2: 現在の値を取得（CPT優先、フォールバック：親メタ）
+        const currentTargetType = workNote?.meta?._ofwn_target_type || meta?._ofwn_target_type || '';
+        const currentTargetId = workNote?.meta?._ofwn_target_id || meta?._ofwn_target_id || '';
+        const currentRequester = workNote?.meta?._ofwn_requester || meta?._ofwn_requester || '';
+        const currentWorker = workNote?.meta?._ofwn_worker || meta?._ofwn_worker || '';
+        const currentStatus = workNote?.meta?._ofwn_status || meta?._ofwn_status || '依頼';
+        const currentWorkDate = workNote?.meta?._ofwn_work_date || meta?._ofwn_work_date || new Date().toISOString().split('T')[0];
+        // CPT優先：post_title/post_content → メタ → 旧データ
+        const currentWorkTitle = workNote?.title?.rendered || workNote?.meta?._ofwn_work_title || meta?._ofwn_work_title || meta?._ofwn_target_label || '';
+        const currentWorkContent = workNote?.content?.rendered || workNote?.meta?._ofwn_work_content || meta?._ofwn_work_content || '';
+        
+        // Phase 2: CPT作成・更新ヘルパー関数
+        const createOrUpdateWorkNote = async function(updates) {
+            setHasUnsavedChanges(true);
+            
+            // CPT未作成の場合は先に作成
+            if (!boundCptId) {
+                setIsCreatingCpt(true);
+                try {
+                    // サーバーサイドのget_or_create_work_note_cpt()呼び出し
+                    const response = await wp.apiFetch({
+                        path: `/wp/v2/of_work_note`,
+                        method: 'POST',
+                        data: {
+                            status: 'publish',
+                            title: updates._ofwn_work_title || '',
+                            content: updates._ofwn_work_content || '',
+                            meta: {
+                                _ofwn_bound_post_id: postId,
+                                _ofwn_target_type: updates._ofwn_target_type || '',
+                                _ofwn_target_id: updates._ofwn_target_id || '',
+                                _ofwn_requester: updates._ofwn_requester || '',
+                                _ofwn_worker: updates._ofwn_worker || '',
+                                _ofwn_status: updates._ofwn_status || '依頼',
+                                _ofwn_work_date: updates._ofwn_work_date || new Date().toISOString().split('T')[0]
+                            }
+                        }
+                    });
+                    
+                    // 親投稿に _ofwn_bound_cpt_id を設定
+                    setMeta({ ...meta, _ofwn_bound_cpt_id: response.id });
+                    
+                } catch (error) {
+                    console.error('Work Notes: CPT作成エラー', error);
+                } finally {
+                    setIsCreatingCpt(false);
+                    setHasUnsavedChanges(false);
+                }
+            } else {
+                // 既存CPT更新
+                try {
+                    const updateData = {};
+                    
+                    // タイトル・内容の更新
+                    if (updates._ofwn_work_title !== undefined) {
+                        updateData.title = updates._ofwn_work_title;
+                    }
+                    if (updates._ofwn_work_content !== undefined) {
+                        updateData.content = updates._ofwn_work_content;
+                    }
+                    
+                    // メタ更新
+                    const metaUpdates = {};
+                    ['_ofwn_target_type', '_ofwn_target_id', '_ofwn_requester', '_ofwn_worker', '_ofwn_status', '_ofwn_work_date'].forEach(key => {
+                        if (updates[key] !== undefined) {
+                            metaUpdates[key] = updates[key];
+                        }
+                    });
+                    
+                    if (Object.keys(metaUpdates).length > 0) {
+                        updateData.meta = metaUpdates;
+                    }
+                    
+                    if (Object.keys(updateData).length > 0) {
+                        await wp.apiFetch({
+                            path: `/wp/v2/of_work_note/${boundCptId}`,
+                            method: 'POST',
+                            data: updateData
+                        });
+                    }
+                    
+                } catch (error) {
+                    console.error('Work Notes: CPT更新エラー', error);
+                } finally {
+                    setHasUnsavedChanges(false);
+                }
+            }
+        };
+        
+        // 旧式メタ更新（Phase 1互換性用）
         const updateMeta = function(key, value) {
             setMeta({ ...meta, [key]: value });
         };
@@ -169,7 +264,7 @@
                             { label: __('その他', 'work-notes'), value: 'other' }
                         ],
                         onChange: function(value) {
-                            updateMeta('_ofwn_target_type', value);
+                            createOrUpdateWorkNote({ _ofwn_target_type: value });
                         }
                     }),
                     
@@ -179,7 +274,7 @@
                         className: 'work-notes-field',
                         value: currentTargetId,
                         onChange: function(value) {
-                            updateMeta('_ofwn_target_id', value);
+                            createOrUpdateWorkNote({ _ofwn_target_id: value });
                         }
                     }),
                     
@@ -192,9 +287,9 @@
                         options: requesterSelectOptions,
                         onChange: function(value) {
                             if (value === '__custom__') {
-                                updateMeta('_ofwn_requester', '');
+                                createOrUpdateWorkNote({ _ofwn_requester: '' });
                             } else {
-                                updateMeta('_ofwn_requester', value);
+                                createOrUpdateWorkNote({ _ofwn_requester: value });
                             }
                         }
                     }),
@@ -206,7 +301,7 @@
                         className: 'work-notes-field',
                         value: currentRequester,
                         onChange: function(value) {
-                            updateMeta('_ofwn_requester', value);
+                            createOrUpdateWorkNote({ _ofwn_requester: value });
                         }
                     }),
                     
@@ -218,9 +313,9 @@
                         options: workerSelectOptions,
                         onChange: function(value) {
                             if (value === '__custom__') {
-                                updateMeta('_ofwn_worker', '');
+                                createOrUpdateWorkNote({ _ofwn_worker: '' });
                             } else {
-                                updateMeta('_ofwn_worker', value);
+                                createOrUpdateWorkNote({ _ofwn_worker: value });
                             }
                         }
                     }),
@@ -232,7 +327,7 @@
                         className: 'work-notes-field',
                         value: currentWorker,
                         onChange: function(value) {
-                            updateMeta('_ofwn_worker', value);
+                            createOrUpdateWorkNote({ _ofwn_worker: value });
                         }
                     }),
                     
@@ -247,7 +342,7 @@
                             { label: __('完了', 'work-notes'), value: '完了' }
                         ],
                         onChange: function(value) {
-                            updateMeta('_ofwn_status', value);
+                            createOrUpdateWorkNote({ _ofwn_status: value });
                         }
                     }),
                     
@@ -258,7 +353,7 @@
                         type: 'date',
                         value: currentWorkDate,
                         onChange: function(value) {
-                            updateMeta('_ofwn_work_date', value);
+                            createOrUpdateWorkNote({ _ofwn_work_date: value });
                         }
                     }),
                     
@@ -269,7 +364,7 @@
                         value: currentWorkTitle,
                         rows: 2,
                         onChange: function(value) {
-                            updateMeta('_ofwn_work_title', value);
+                            createOrUpdateWorkNote({ _ofwn_work_title: value });
                         }
                     }),
                     
@@ -280,7 +375,7 @@
                         rows: 3,
                         value: currentWorkContent,
                         onChange: function(value) {
-                            updateMeta('_ofwn_work_content', value);
+                            createOrUpdateWorkNote({ _ofwn_work_content: value });
                         }
                     })
                 )

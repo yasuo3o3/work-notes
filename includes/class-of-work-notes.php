@@ -100,6 +100,7 @@ class OF_Work_Notes {
             'supports' => ['title','editor','author'],
             'capability_type' => 'post',
             'map_meta_cap' => true,
+            'show_in_rest' => true,
         ]);
     }
 
@@ -594,8 +595,10 @@ class OF_Work_Notes {
         $all_meta_fields = [
             '_ofwn_requester', '_ofwn_worker', '_ofwn_target_type', 
             '_ofwn_target_id', '_ofwn_target_label', '_ofwn_status', '_ofwn_work_date',
-            // 修正: 新フィールドを追加してGutenbergサイドバーでREST API経由の保存を可能に
-            '_ofwn_work_title', '_ofwn_work_content'
+            // Phase 1: 互換性のための既存フィールド（段階的廃止予定）
+            '_ofwn_work_title', '_ofwn_work_content',
+            // Phase 2: CPT単一ソース化のための新フィールド
+            '_ofwn_bound_cpt_id'
         ];
         
         foreach ($target_post_types as $post_type) {
@@ -646,6 +649,20 @@ class OF_Work_Notes {
             },
             'sanitize_callback' => 'absint'
         ]);
+        
+        // Phase 2: CPT用の残りメタフィールド
+        $cpt_meta_fields = ['_ofwn_target_type', '_ofwn_target_id', '_ofwn_status', '_ofwn_work_date'];
+        foreach ($cpt_meta_fields as $meta_key) {
+            register_post_meta(self::CPT, $meta_key, [
+                'show_in_rest' => true,
+                'single' => true,
+                'type' => 'string',
+                'auth_callback' => function($allowed, $meta_key, $post_id) {
+                    return current_user_can('edit_post', $post_id);
+                },
+                'sanitize_callback' => 'sanitize_text_field'
+            ]);
+        }
         
         // 作業タイトル・作業内容メタフィールド：post/page用のみ（Gutenbergサイドバー入力用）
         // CPT（of_work_note）は標準のpost_title/post_contentを使用
@@ -1217,6 +1234,12 @@ class OF_Work_Notes {
             
             // 正規リンク用メタフィールドを設定
             update_post_meta($note_id, '_ofwn_bound_post_id', $post_id);
+            
+            // Phase 2: 親投稿に CPT ID を設定（サイドバーからの直接アクセス用）
+            update_post_meta($post_id, '_ofwn_bound_cpt_id', $note_id);
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN PHASE2] Parent post ' . $post_id . ' bound to CPT ' . $note_id);
+            }
             
             // 重複防止用ハッシュをCPT更新成功後に1回のみ更新
             if (!is_wp_error($note_id) && $note_id) {
@@ -1995,6 +2018,60 @@ class OF_Work_Notes {
                 }
             }
         }
+    }
+    
+    /**
+     * Phase 2: 親投稿IDからCPTを取得または作成
+     * @wordpress/dataで利用するためのCPT管理メソッド
+     */
+    public function get_or_create_work_note_cpt($parent_id) {
+        // 既存のCPT IDを取得
+        $cpt_id = get_post_meta($parent_id, '_ofwn_bound_cpt_id', true);
+        
+        // CPTが存在するかチェック
+        if ($cpt_id && get_post_status($cpt_id)) {
+            return intval($cpt_id);
+        }
+        
+        // Phase 2: 新規CPT作成（最小構成）
+        $parent_post = get_post($parent_id);
+        if (!$parent_post) {
+            return false;
+        }
+        
+        $note_id = wp_insert_post([
+            'post_type' => self::CPT,
+            'post_status' => 'publish',
+            'post_title' => '作業メモ ' . current_time('Y-m-d H:i'),
+            'post_content' => '',
+            'post_author' => get_current_user_id(),
+            'post_date' => current_time('mysql'),
+            'post_date_gmt' => gmdate('Y-m-d H:i:s'),
+        ], true);
+        
+        if (!is_wp_error($note_id) && $note_id) {
+            // Phase 2: 双方向関連付け
+            update_post_meta($note_id, '_ofwn_bound_post_id', $parent_id);
+            update_post_meta($parent_id, '_ofwn_bound_cpt_id', $note_id);
+            
+            // Phase 2: 他の必須メタデータを設定
+            update_post_meta($note_id, '_ofwn_target_type', $parent_post->post_type);
+            update_post_meta($note_id, '_ofwn_target_id', $parent_id);
+            update_post_meta($note_id, '_ofwn_status', '依頼');
+            update_post_meta($note_id, '_ofwn_work_date', current_time('Y-m-d'));
+            
+            // Phase 2: キャッシュクリア
+            clean_post_cache($note_id);
+            clean_post_cache($parent_id);
+            
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN PHASE2] CPT created for parent: parent=' . $parent_id . ' cpt=' . $note_id);
+            }
+            
+            return intval($note_id);
+        }
+        
+        return false;
     }
     
     /**
