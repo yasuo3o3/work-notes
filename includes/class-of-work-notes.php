@@ -864,51 +864,64 @@ class OF_Work_Notes {
             return;
         }
         
-        // 作業メモ関連のメタデータを取得（RESTリクエスト時はキャッシュクリア後再取得）
-        if (defined('REST_REQUEST') && REST_REQUEST) {
-            // RESTリクエスト時はメタデータキャッシュをクリアして最新値を取得
-            wp_cache_delete($post_id, 'post_meta');
-            clean_post_cache($post_id);
+        // RESTリクエスト時は$_POST['meta']から最新値を優先取得
+        $is_rest_request = defined('REST_REQUEST') && REST_REQUEST;
+        
+        if ($is_rest_request && isset($_POST['meta'])) {
+            // RESTリクエスト時：$_POST['meta']から直接最新値を取得
+            $target_type = $_POST['meta']['_ofwn_target_type'] ?? get_post_meta($post_id, '_ofwn_target_type', true);
+            $target_id = $_POST['meta']['_ofwn_target_id'] ?? get_post_meta($post_id, '_ofwn_target_id', true);
+            $target_label = $_POST['meta']['_ofwn_target_label'] ?? get_post_meta($post_id, '_ofwn_target_label', true);
+            $requester = $_POST['meta']['_ofwn_requester'] ?? get_post_meta($post_id, '_ofwn_requester', true);
+            $worker = $_POST['meta']['_ofwn_worker'] ?? get_post_meta($post_id, '_ofwn_worker', true);
+            $status = $_POST['meta']['_ofwn_status'] ?? get_post_meta($post_id, '_ofwn_status', true);
+            $work_date = $_POST['meta']['_ofwn_work_date'] ?? get_post_meta($post_id, '_ofwn_work_date', true);
+            $work_title_check = $_POST['meta']['_ofwn_work_title'] ?? '';
+            $work_content_check = $_POST['meta']['_ofwn_work_content'] ?? '';
+        } else {
+            // 通常のリクエスト時：メタデータから取得（キャッシュクリア後）
+            if ($is_rest_request) {
+                wp_cache_delete($post_id, 'post_meta');
+                clean_post_cache($post_id);
+            }
+            
+            $target_type = get_post_meta($post_id, '_ofwn_target_type', true);
+            $target_id = get_post_meta($post_id, '_ofwn_target_id', true);
+            $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
+            $requester = get_post_meta($post_id, '_ofwn_requester', true);
+            $worker = get_post_meta($post_id, '_ofwn_worker', true);
+            $status = get_post_meta($post_id, '_ofwn_status', true);
+            $work_date = get_post_meta($post_id, '_ofwn_work_date', true);
+            $work_title_check = get_post_meta($post_id, '_ofwn_work_title', true);
+            $work_content_check = get_post_meta($post_id, '_ofwn_work_content', true);
         }
         
-        $target_type = get_post_meta($post_id, '_ofwn_target_type', true);
-        $target_id = get_post_meta($post_id, '_ofwn_target_id', true);
-        $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
-        $requester = get_post_meta($post_id, '_ofwn_requester', true);
-        $worker = get_post_meta($post_id, '_ofwn_worker', true);
-        $status = get_post_meta($post_id, '_ofwn_status', true);
-        $work_date = get_post_meta($post_id, '_ofwn_work_date', true);
-        
-        // 新規追加: 作業タイトルと作業内容を取得（キャッシュクリア後）
-        $work_title_check = get_post_meta($post_id, '_ofwn_work_title', true);
-        $work_content_check = get_post_meta($post_id, '_ofwn_work_content', true);
-        
-        // デバッグログ: post/page保存時のメタ情報（タイミング調査用）
+        // デバッグログ: メタデータ取得状況（最新値取得の確認用）
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
             $current_action = current_action();
             $doing_autosave = defined('DOING_AUTOSAVE') && DOING_AUTOSAVE ? 'true' : 'false';
-            $is_rest = defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false';
             $is_revision = wp_is_post_revision($post_id) ? 'true' : 'false';
             $can_edit = current_user_can('edit_post', $post_id) ? 'true' : 'false';
             $post_status = get_post_status($post_id);
             
             error_log('[OFWN SAVE_ANALYSIS] === 保存処理開始 ===');
             error_log('[OFWN SAVE_ANALYSIS] Post ID: ' . $post_id . ', Type: ' . $post->post_type . ', Status: ' . $post_status);
-            error_log('[OFWN SAVE_ANALYSIS] Context: Action=' . $current_action . ', Autosave=' . $doing_autosave . ', REST=' . $is_rest . ', Revision=' . $is_revision . ', CanEdit=' . $can_edit);
-            error_log('[OFWN META_RETRIEVAL] Work meta RETRIEVED: title="' . $work_title_check . '", content="' . $work_content_check . '"');
-            error_log('[OFWN META_RETRIEVAL] Other meta: requester="' . $requester . '", worker="' . $worker . '", status="' . $status . '"');
+            error_log('[OFWN SAVE_ANALYSIS] Context: Action=' . $current_action . ', Autosave=' . $doing_autosave . ', REST=' . ($is_rest_request ? 'true' : 'false') . ', Revision=' . $is_revision . ', CanEdit=' . $can_edit);
             
-            // RESTリクエスト時は$_POSTのメタも確認
-            if ($is_rest === 'true' && isset($_POST['meta'])) {
+            // メタデータ取得方法とその結果をログ出力
+            $meta_source = $is_rest_request && isset($_POST['meta']) ? 'REST_POST' : 'get_post_meta';
+            error_log('[OFWN META_LATEST] Source: ' . $meta_source . ', title="' . $work_title_check . '", content="' . $work_content_check . '"');
+            error_log('[OFWN META_LATEST] Other meta: requester="' . $requester . '", worker="' . $worker . '", status="' . $status . '"');
+            
+            // RESTリクエスト時の詳細比較
+            if ($is_rest_request && isset($_POST['meta'])) {
                 $rest_work_title = $_POST['meta']['_ofwn_work_title'] ?? 'not_set';
                 $rest_work_content = $_POST['meta']['_ofwn_work_content'] ?? 'not_set';
-                error_log('[OFWN META_RETRIEVAL] REST $_POST meta: title="' . $rest_work_title . '", content="' . $rest_work_content . '"');
-            }
-            
-            // RESTリクエストのメタデータを確認
-            if ($is_rest && isset($_POST['meta'])) {
-                $rest_meta = $_POST['meta'];
-                error_log('[OFWN SAVE_ANALYSIS] REST meta received: ' . json_encode($rest_meta));
+                $db_work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+                $db_work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+                
+                error_log('[OFWN META_COMPARE] REST title: "' . $rest_work_title . '" vs DB title: "' . $db_work_title . '"');
+                error_log('[OFWN META_COMPARE] REST content: "' . $rest_work_content . '" vs DB content: "' . $db_work_content . '"');
             }
             
             // 既存CPTの確認
@@ -1027,9 +1040,9 @@ class OF_Work_Notes {
             delete_post_meta($post_id, '_ofwn_pending_cpt_creation');
         }
         
-        // 重複防止のためのハッシュ生成（新フィールドも含める）
-        $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
-        $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        // 重複防止のためのハッシュ生成（取得済みの最新値を使用）
+        $work_title = $work_title_check;
+        $work_content = $work_content_check;
         
         $meta_payload = [
             'target_type' => $target_type,
