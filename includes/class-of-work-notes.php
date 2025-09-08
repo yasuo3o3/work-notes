@@ -20,18 +20,21 @@ class OF_Work_Notes {
         add_action('save_post', [$this, 'migrate_legacy_meta_to_post_fields'], 10, 2);
         add_action('save_post', [$this, 'capture_quick_note_from_parent'], 20, 2);
         
-        // Gutenberg対応: 投稿/固定ページ保存時にメタデータから作業メモCPT自動生成
-        // 優先度は中程度に設定（save_postは補完用）
+        // Gutenberg対応: フロントエンド主導の作業メモ作成に変更
+        // save_postフックは一時的に無効化（JavaScript主導に移行）
+        // add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 50, 2);
+        // add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 50, 2);
+        // add_action('wp_after_insert_post', [$this, 'final_create_work_note_from_meta'], 30, 4);
+        
+        // デバッグ用フックは保持
         add_action('save_post_post', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 50, 2);
         add_action('save_post_post', [$this, 'debug_save_timing_late'], 100, 2);
         add_action('save_post_page', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 50, 2);
         add_action('save_post_page', [$this, 'debug_save_timing_late'], 100, 2);
-        
-        // wp_after_insert_postフック（メインの作業メモ作成処理）
         add_action('wp_after_insert_post', [$this, 'debug_after_insert_post'], 10, 4);
-        add_action('wp_after_insert_post', [$this, 'final_create_work_note_from_meta'], 30, 4);
+        
+        // AJAX エンドポイント追加（JavaScript主導の作業メモ作成用）
+        add_action('wp_ajax_ofwn_create_work_note', [$this, 'ajax_create_work_note']);
         
         // Phase 1: CPT削除時の親投稿メタデータクリーンアップ
         add_action('before_delete_post', [$this, 'cleanup_parent_meta_on_cpt_delete']);
@@ -1377,6 +1380,12 @@ class OF_Work_Notes {
             'nonce' => wp_create_nonce('ofwn_sidebar_nonce')
         ]);
         
+        // AJAX作業メモ作成用のnonce（別の変数として設定）
+        wp_localize_script('ofwn-gutenberg-sidebar', 'ofwnAjax', [
+            'nonce' => wp_create_nonce('ofwn_create_work_note'),
+            'ajax_url' => admin_url('admin-ajax.php')
+        ]);
+        
         // 初期値データを別の変数として渡す
         wp_localize_script('ofwn-gutenberg-sidebar', 'ofwnPrefill', $prefill_data ?: []);
     }
@@ -2177,6 +2186,121 @@ class OF_Work_Notes {
                 $error_msg = is_wp_error($note_id) ? $note_id->get_error_message() : 'Unknown error';
                 error_log('[OFWN FINAL_CREATE] FAILED: ' . $error_msg);
             }
+        }
+    }
+    
+    /**
+     * JavaScript主導の作業メモ作成AJAXエンドポイント
+     * 投稿保存後に確実に最新のメタデータでCPTを作成
+     */
+    public function ajax_create_work_note() {
+        // ノンス検証
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_create_work_note')) {
+            wp_send_json_error(['message' => 'セキュリティチェックに失敗しました。']);
+        }
+        
+        // パラメータ取得
+        $post_id = intval($_POST['post_id'] ?? 0);
+        $work_title = sanitize_text_field($_POST['work_title'] ?? '');
+        $work_content = wp_kses_post($_POST['work_content'] ?? '');
+        $requester = sanitize_text_field($_POST['requester'] ?? '');
+        $worker = sanitize_text_field($_POST['worker'] ?? '');
+        $status = sanitize_text_field($_POST['status'] ?? '依頼');
+        $work_date = sanitize_text_field($_POST['work_date'] ?? '');
+        
+        if (!$post_id || (!$work_title && !$work_content)) {
+            wp_send_json_error(['message' => '必要なパラメータが不足しています。']);
+        }
+        
+        // 権限チェック
+        if (!current_user_can('edit_post', $post_id)) {
+            wp_send_json_error(['message' => 'この投稿を編集する権限がありません。']);
+        }
+        
+        try {
+            // 重複チェック：同じ内容の作業メモが最近作成されていないか確認
+            $existing_notes = get_posts([
+                'post_type' => self::CPT,
+                'posts_per_page' => 1,
+                'meta_query' => [
+                    [
+                        'key' => '_ofwn_bound_post_id',
+                        'value' => $post_id,
+                        'compare' => '='
+                    ]
+                ],
+                'orderby' => 'date',
+                'order' => 'DESC'
+            ]);
+            
+            // 最新のCPTと内容が同じなら重複として作成しない
+            if (!empty($existing_notes)) {
+                $latest_note = $existing_notes[0];
+                $latest_title = get_post_field('post_title', $latest_note->ID);
+                $latest_content = get_post_field('post_content', $latest_note->ID);
+                
+                if ($latest_title === $work_title && $latest_content === $work_content) {
+                    wp_send_json_success([
+                        'message' => '同じ内容の作業メモが既に存在します。',
+                        'note_id' => $latest_note->ID,
+                        'duplicate' => true
+                    ]);
+                    return;
+                }
+            }
+            
+            // 新しい作業メモCPTを作成
+            $note_title = !empty($work_title) ? $work_title : '作業メモ ' . current_time('Y-m-d H:i');
+            $note_content = !empty($work_content) ? $work_content : '';
+            
+            $note_id = wp_insert_post([
+                'post_type' => self::CPT,
+                'post_status' => 'publish',
+                'post_title' => $note_title,
+                'post_content' => $note_content,
+                'post_author' => get_current_user_id(),
+                'post_date' => current_time('mysql'),
+                'post_date_gmt' => gmdate('Y-m-d H:i:s'),
+            ], true);
+            
+            if (is_wp_error($note_id)) {
+                wp_send_json_error(['message' => 'CPT作成に失敗: ' . $note_id->get_error_message()]);
+            }
+            
+            // CPTメタデータを設定
+            update_post_meta($note_id, '_ofwn_target_type', 'post');
+            update_post_meta($note_id, '_ofwn_target_id', (string)$post_id);
+            update_post_meta($note_id, '_ofwn_requester', $requester);
+            update_post_meta($note_id, '_ofwn_worker', $worker);
+            update_post_meta($note_id, '_ofwn_status', $status ?: '依頼');
+            update_post_meta($note_id, '_ofwn_work_date', $work_date ?: current_time('Y-m-d'));
+            update_post_meta($note_id, '_ofwn_bound_post_id', $post_id);
+            
+            // 親投稿のCPT ID配列を更新
+            $existing_cpt_ids = get_post_meta($post_id, '_ofwn_bound_cpt_ids', true);
+            if (!is_array($existing_cpt_ids)) {
+                $existing_cpt_ids = [];
+            }
+            $existing_cpt_ids[] = $note_id;
+            update_post_meta($post_id, '_ofwn_bound_cpt_ids', $existing_cpt_ids);
+            update_post_meta($post_id, '_ofwn_bound_cpt_id', $note_id);
+            
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN AJAX_CREATE] SUCCESS: Created CPT ' . $note_id . ' with title: "' . $note_title . '" via AJAX');
+            }
+            
+            wp_send_json_success([
+                'message' => '作業メモを作成しました。',
+                'note_id' => $note_id,
+                'note_title' => $note_title,
+                'note_content' => $note_content
+            ]);
+            
+        } catch (Exception $e) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN AJAX_CREATE] ERROR: ' . $e->getMessage());
+            }
+            wp_send_json_error(['message' => 'エラーが発生しました: ' . $e->getMessage()]);
         }
     }
     

@@ -76,10 +76,9 @@
             return tempDiv.textContent || tempDiv.innerText || '';
         };
         
-        // Phase 2: 混合モード - 親メタ更新+サーバー側CPT同期
+        // Phase 3: JavaScript主導の作業メモ作成（遅延問題対策）
         const createOrUpdateWorkNote = function(updates) {
             // 親投稿のメタフィールドを更新（従来通り）
-            // サーバーサイドのsave_postフックでCPT同期が実行される
             const newMeta = { ...meta };
             Object.keys(updates).forEach(key => {
                 newMeta[key] = updates[key];
@@ -88,6 +87,47 @@
             
             // デバッグログ
             console.log('Work Notes: メタフィールド更新', updates);
+        };
+        
+        // 投稿保存後のAJAX作業メモ作成
+        const createWorkNoteViaAjax = function(workTitle, workContent) {
+            // 投稿保存完了を少し待ってから実行（データベースコミット待ち）
+            setTimeout(() => {
+                const ajaxData = {
+                    action: 'ofwn_create_work_note',
+                    nonce: window.ofwnAjax?.nonce || '',
+                    post_id: postId,
+                    work_title: workTitle || '',
+                    work_content: workContent || '',
+                    requester: currentRequester,
+                    worker: currentWorker,
+                    status: currentStatus,
+                    work_date: currentWorkDate
+                };
+                
+                console.log('Work Notes: AJAX作業メモ作成開始', ajaxData);
+                
+                wp.apiFetch({
+                    path: '/wp-admin/admin-ajax.php',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams(ajaxData)
+                }).then(response => {
+                    console.log('Work Notes: AJAX作業メモ作成成功', response);
+                    if (response.success && !response.data.duplicate) {
+                        // 成功通知（オプション）
+                        wp.data.dispatch('core/notices').createNotice(
+                            'success',
+                            '作業メモを作成しました: ' + response.data.note_title,
+                            { type: 'snackbar' }
+                        );
+                    }
+                }).catch(error => {
+                    console.error('Work Notes: AJAX作業メモ作成エラー', error);
+                });
+            }, 500); // 0.5秒後に実行
         };
         
         // 旧式メタ更新（Phase 1互換性用）
@@ -154,6 +194,27 @@
             }
             
         }, [meta, prefillApplied, backfillProcessed]);
+        
+        // 投稿保存の監視とAJAX作業メモ作成
+        const isSaving = useSelect(select => 
+            select('core/editor').isSavingPost(), []
+        );
+        const wasSaving = wp.element.useRef(false);
+        
+        useEffect(() => {
+            // 保存完了時（isSaving: true → false）にAJAX実行
+            if (wasSaving.current && !isSaving) {
+                const workTitle = meta?._ofwn_work_title || '';
+                const workContent = meta?._ofwn_work_content || '';
+                
+                // 作業タイトルまたは作業内容がある場合のみ実行
+                if (workTitle || workContent) {
+                    console.log('Work Notes: 投稿保存完了 - AJAX作業メモ作成を開始');
+                    createWorkNoteViaAjax(workTitle, workContent);
+                }
+            }
+            wasSaving.current = isSaving;
+        }, [isSaving, meta?._ofwn_work_title, meta?._ofwn_work_content]);
         
         // 依頼元・担当者のオプション（サーバーから取得）
         const requesterOptions = window.ofwnGutenbergData?.requesters || [];
