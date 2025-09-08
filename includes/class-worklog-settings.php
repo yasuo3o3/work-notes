@@ -12,6 +12,9 @@ class OFWN_Worklog_Settings {
         add_action('admin_menu', [$this, 'add_settings_page']);
         add_action('admin_init', [$this, 'register_master_settings']);
         
+        // AJAX ハンドラー追加
+        add_action('wp_ajax_ofwn_clear_cache', [$this, 'ajax_clear_cache']);
+        
         // マイグレーション処理（通知機能削除）
         add_action('plugins_loaded', [$this, 'run_migration'], 1);
     }
@@ -147,6 +150,18 @@ class OFWN_Worklog_Settings {
                 <div id="ofwn-distribution-result" style="margin-top: 10px;"></div>
             </div>
             
+            <hr>
+            
+            <h2><?php esc_html_e('キャッシュクリア', 'work-notes'); ?></h2>
+            <p><?php esc_html_e('作業メモの保存に問題がある場合、キャッシュをクリアして改善する可能性があります。', 'work-notes'); ?></p>
+            
+            <div id="ofwn-cache-clear">
+                <button type="button" id="ofwn-clear-cache-btn" class="button button-secondary">
+                    <?php esc_html_e('キャッシュをクリア', 'work-notes'); ?>
+                </button>
+                <div id="ofwn-cache-result" style="margin-top: 10px;"></div>
+            </div>
+            
             <script>
             jQuery(document).ready(function($) {
                 $('#ofwn-check-distribution-btn').on('click', function() {
@@ -171,10 +186,133 @@ class OFWN_Worklog_Settings {
                         $btn.prop('disabled', false).text('<?php esc_html_e('配布エンドポイントをテスト', 'work-notes'); ?>');
                     });
                 });
+                
+                // キャッシュクリア機能
+                $('#ofwn-clear-cache-btn').on('click', function() {
+                    var $btn = $(this);
+                    var $result = $('#ofwn-cache-result');
+                    
+                    $btn.prop('disabled', true).text('<?php esc_html_e('クリア中...', 'work-notes'); ?>');
+                    $result.html('');
+                    
+                    $.post(ajaxurl, {
+                        action: 'ofwn_clear_cache',
+                        nonce: '<?php echo wp_create_nonce('ofwn_clear_cache'); ?>'
+                    }, function(response) {
+                        if (response.success) {
+                            $result.html('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
+                        } else {
+                            $result.html('<div class="notice notice-error inline"><p>' + response.data.message + '</p></div>');
+                        }
+                    }).fail(function() {
+                        $result.html('<div class="notice notice-error inline"><p><?php esc_html_e('キャッシュクリアに失敗しました。', 'work-notes'); ?></p></div>');
+                    }).always(function() {
+                        $btn.prop('disabled', false).text('<?php esc_html_e('キャッシュをクリア', 'work-notes'); ?>');
+                    });
+                });
             });
             </script>
         </div>
         <?php
+    }
+    
+    /**
+     * キャッシュクリアのAJAXハンドラー
+     */
+    public function ajax_clear_cache() {
+        // ノンス検証
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_clear_cache')) {
+            wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
+        }
+        
+        // 権限チェック
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('この操作を実行する権限がありません。', 'work-notes')]);
+        }
+        
+        try {
+            $cleared_items = [];
+            
+            // WordPressオブジェクトキャッシュクリア
+            if (wp_cache_flush()) {
+                $cleared_items[] = 'WordPressオブジェクトキャッシュ';
+            }
+            
+            // WordPress投稿キャッシュクリア
+            $this->clear_posts_cache();
+            $cleared_items[] = '投稿メタデータキャッシュ';
+            
+            // トランジェントAPIクリア
+            $this->clear_work_notes_transients();
+            $cleared_items[] = 'work-notes関連トランジェント';
+            
+            // OPcacheクリア（利用可能な場合）
+            if (function_exists('opcache_reset') && opcache_reset()) {
+                $cleared_items[] = 'OPcache';
+            }
+            
+            $message = 'キャッシュクリア完了: ' . implode('、', $cleared_items);
+            
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN CACHE_CLEAR] ' . $message);
+            }
+            
+            wp_send_json_success(['message' => $message]);
+            
+        } catch (Exception $e) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN CACHE_CLEAR] Error: ' . $e->getMessage());
+            }
+            wp_send_json_error(['message' => 'キャッシュクリア中にエラーが発生しました: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * work-notes関連の投稿キャッシュをクリア
+     */
+    private function clear_posts_cache() {
+        global $wpdb;
+        
+        // work-notes関連の投稿IDを取得
+        $post_ids = $wpdb->get_col($wpdb->prepare("
+            SELECT ID FROM {$wpdb->posts} 
+            WHERE post_type IN ('post', 'page', 'of_work_note')
+        "));
+        
+        // 各投稿のキャッシュをクリア
+        foreach ($post_ids as $post_id) {
+            clean_post_cache($post_id);
+            wp_cache_delete($post_id, 'post_meta');
+        }
+    }
+    
+    /**
+     * work-notes関連のトランジェントをクリア
+     */
+    private function clear_work_notes_transients() {
+        global $wpdb;
+        
+        // work-notes関連のトランジェントキーを検索して削除
+        $transient_keys = $wpdb->get_col($wpdb->prepare("
+            SELECT option_name FROM {$wpdb->options} 
+            WHERE option_name LIKE %s 
+            OR option_name LIKE %s
+            OR option_name LIKE %s
+        ", 
+            '_transient_ofwn_%',
+            '_transient_timeout_ofwn_%',
+            '_transient_work_notes_%'
+        ));
+        
+        foreach ($transient_keys as $key) {
+            if (strpos($key, '_transient_timeout_') === 0) {
+                // タイムアウト用のキーは削除をスキップ（deleteTransientで自動処理）
+                continue;
+            }
+            
+            $transient_name = str_replace(['_transient_', '_transient_timeout_'], '', $key);
+            delete_transient($transient_name);
+        }
     }
     
     /**
