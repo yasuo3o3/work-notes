@@ -44,14 +44,11 @@
         const [prefillApplied, setPrefillApplied] = useState(false);
         const [backfillProcessed, setBackfillProcessed] = useState(false);
         
-        // Phase 2: CPT直接アクセス用のhooks
-        const { getEntityRecord, editEntityRecord, saveEntityRecord } = useDispatch('core');
-        
-        // Phase 2: 親投稿のメタデータから _ofwn_bound_cpt_id を取得
+        // Phase 2: 親投稿のメタデータを取得（CPT ID含む）
         const [meta, setMeta] = useEntityProp('postType', postType, 'meta', postId);
         const boundCptId = meta?._ofwn_bound_cpt_id;
         
-        // Phase 2: CPT直接取得
+        // Phase 2: CPT直接取得（表示用）
         const workNote = useSelect(
             (select) => {
                 if (!boundCptId) return null;
@@ -59,10 +56,6 @@
             },
             [boundCptId]
         );
-        
-        // Phase 2: CPT作成・保存処理の状態管理
-        const [isCreatingCpt, setIsCreatingCpt] = useState(false);
-        const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
         
         // Phase 2: 現在の値を取得（CPT優先、フォールバック：親メタ）
         const currentTargetType = workNote?.meta?._ofwn_target_type || meta?._ofwn_target_type || '';
@@ -75,82 +68,18 @@
         const currentWorkTitle = workNote?.title?.rendered || workNote?.meta?._ofwn_work_title || meta?._ofwn_work_title || meta?._ofwn_target_label || '';
         const currentWorkContent = workNote?.content?.rendered || workNote?.meta?._ofwn_work_content || meta?._ofwn_work_content || '';
         
-        // Phase 2: CPT作成・更新ヘルパー関数
-        const createOrUpdateWorkNote = async function(updates) {
-            setHasUnsavedChanges(true);
+        // Phase 2: 混合モード - 親メタ更新+サーバー側CPT同期
+        const createOrUpdateWorkNote = function(updates) {
+            // 親投稿のメタフィールドを更新（従来通り）
+            // サーバーサイドのsave_postフックでCPT同期が実行される
+            const newMeta = { ...meta };
+            Object.keys(updates).forEach(key => {
+                newMeta[key] = updates[key];
+            });
+            setMeta(newMeta);
             
-            // CPT未作成の場合は先に作成
-            if (!boundCptId) {
-                setIsCreatingCpt(true);
-                try {
-                    // サーバーサイドのget_or_create_work_note_cpt()呼び出し
-                    const response = await wp.apiFetch({
-                        path: `/wp/v2/of_work_note`,
-                        method: 'POST',
-                        data: {
-                            status: 'publish',
-                            title: updates._ofwn_work_title || '',
-                            content: updates._ofwn_work_content || '',
-                            meta: {
-                                _ofwn_bound_post_id: postId,
-                                _ofwn_target_type: updates._ofwn_target_type || '',
-                                _ofwn_target_id: updates._ofwn_target_id || '',
-                                _ofwn_requester: updates._ofwn_requester || '',
-                                _ofwn_worker: updates._ofwn_worker || '',
-                                _ofwn_status: updates._ofwn_status || '依頼',
-                                _ofwn_work_date: updates._ofwn_work_date || new Date().toISOString().split('T')[0]
-                            }
-                        }
-                    });
-                    
-                    // 親投稿に _ofwn_bound_cpt_id を設定
-                    setMeta({ ...meta, _ofwn_bound_cpt_id: response.id });
-                    
-                } catch (error) {
-                    console.error('Work Notes: CPT作成エラー', error);
-                } finally {
-                    setIsCreatingCpt(false);
-                    setHasUnsavedChanges(false);
-                }
-            } else {
-                // 既存CPT更新
-                try {
-                    const updateData = {};
-                    
-                    // タイトル・内容の更新
-                    if (updates._ofwn_work_title !== undefined) {
-                        updateData.title = updates._ofwn_work_title;
-                    }
-                    if (updates._ofwn_work_content !== undefined) {
-                        updateData.content = updates._ofwn_work_content;
-                    }
-                    
-                    // メタ更新
-                    const metaUpdates = {};
-                    ['_ofwn_target_type', '_ofwn_target_id', '_ofwn_requester', '_ofwn_worker', '_ofwn_status', '_ofwn_work_date'].forEach(key => {
-                        if (updates[key] !== undefined) {
-                            metaUpdates[key] = updates[key];
-                        }
-                    });
-                    
-                    if (Object.keys(metaUpdates).length > 0) {
-                        updateData.meta = metaUpdates;
-                    }
-                    
-                    if (Object.keys(updateData).length > 0) {
-                        await wp.apiFetch({
-                            path: `/wp/v2/of_work_note/${boundCptId}`,
-                            method: 'POST',
-                            data: updateData
-                        });
-                    }
-                    
-                } catch (error) {
-                    console.error('Work Notes: CPT更新エラー', error);
-                } finally {
-                    setHasUnsavedChanges(false);
-                }
-            }
+            // デバッグログ
+            console.log('Work Notes: メタフィールド更新', updates);
         };
         
         // 旧式メタ更新（Phase 1互換性用）
@@ -159,7 +88,7 @@
         };
         
         // 初期値適用処理（初回マウント時のみ）
-        wp.element.useEffect(() => {
+        useEffect(() => {
             if (prefillApplied || !window.ofwnPrefill || !meta) {
                 return;
             }
