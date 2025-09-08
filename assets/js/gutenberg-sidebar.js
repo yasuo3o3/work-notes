@@ -15,7 +15,7 @@
     const { createElement: e, Fragment } = wp.element;
     const { PluginPostStatusInfo } = wp.editPost;
     const { useSelect, useDispatch } = wp.data;
-    const { TextControl, SelectControl, BaseControl, Button } = wp.components;
+    const { TextControl, TextareaControl, SelectControl, BaseControl, Button } = wp.components;
     const { useEntityProp } = wp.coreData;
     const { registerPlugin } = wp.plugins;
     const { __ } = wp.i18n;
@@ -64,9 +64,17 @@
         const currentWorker = workNote?.meta?._ofwn_worker || meta?._ofwn_worker || '';
         const currentStatus = workNote?.meta?._ofwn_status || meta?._ofwn_status || '依頼';
         const currentWorkDate = workNote?.meta?._ofwn_work_date || meta?._ofwn_work_date || new Date().toISOString().split('T')[0];
-        // CPT優先：post_title/post_content → メタ → 旧データ
-        const currentWorkTitle = workNote?.title?.rendered || workNote?.meta?._ofwn_work_title || meta?._ofwn_work_title || meta?._ofwn_target_label || '';
-        const currentWorkContent = workNote?.content?.rendered || workNote?.meta?._ofwn_work_content || meta?._ofwn_work_content || '';
+        // 編集用：親メタ優先（CPTは参照のみ）
+        const currentWorkTitle = meta?._ofwn_work_title || meta?._ofwn_target_label || '';
+        const currentWorkContent = meta?._ofwn_work_content || '';
+        
+        // Pタグなどを除去するヘルパー関数
+        const stripHtmlTags = (html) => {
+            if (!html) return '';
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            return tempDiv.textContent || tempDiv.innerText || '';
+        };
         
         // Phase 2: 混合モード - 親メタ更新+サーバー側CPT同期
         const createOrUpdateWorkNote = function(updates) {
@@ -297,12 +305,12 @@
                         }
                     }),
                     
-                    // 新規追加: 作業内容
-                    e(TextControl, {
+                    // 新規追加: 作業内容（複数行テキストエリア）
+                    e(TextareaControl, {
                         label: __('作業内容', 'work-notes'),
                         className: 'work-notes-field',
                         rows: 3,
-                        value: currentWorkContent,
+                        value: stripHtmlTags(currentWorkContent),
                         onChange: function(value) {
                             createOrUpdateWorkNote({ _ofwn_work_content: value });
                         }

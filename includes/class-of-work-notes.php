@@ -21,17 +21,17 @@ class OF_Work_Notes {
         add_action('save_post', [$this, 'capture_quick_note_from_parent'], 20, 2);
         
         // Gutenberg対応: 投稿/固定ページ保存時にメタデータから作業メモCPT自動生成
-        // メタデータ保存完了を待つため、より遅い優先度で実行
+        // 優先度は中程度に設定（save_postは補完用）
         add_action('save_post_post', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 999, 2);
-        add_action('save_post_post', [$this, 'debug_save_timing_late'], 1000, 2);
+        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 50, 2);
+        add_action('save_post_post', [$this, 'debug_save_timing_late'], 100, 2);
         add_action('save_post_page', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 999, 2);
-        add_action('save_post_page', [$this, 'debug_save_timing_late'], 1000, 2);
+        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 50, 2);
+        add_action('save_post_page', [$this, 'debug_save_timing_late'], 100, 2);
         
-        // wp_after_insert_postフック（save_postより確実にメタデータ保存後に実行）
+        // wp_after_insert_postフック（メインの作業メモ作成処理）
         add_action('wp_after_insert_post', [$this, 'debug_after_insert_post'], 10, 4);
-        add_action('wp_after_insert_post', [$this, 'final_create_work_note_from_meta'], 50, 4);
+        add_action('wp_after_insert_post', [$this, 'final_create_work_note_from_meta'], 30, 4);
         
         // Phase 1: CPT削除時の親投稿メタデータクリーンアップ
         add_action('before_delete_post', [$this, 'cleanup_parent_meta_on_cpt_delete']);
@@ -1065,13 +1065,22 @@ class OF_Work_Notes {
         // ハッシュが同じなら重複作成を防止してスキップ
         if ($current_hash === $last_hash) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] SKIP: Hash unchanged - preventing duplicate creation');
+                error_log('[OFWN SAVE_POST] SKIP: Hash unchanged - preventing duplicate creation');
             }
             return;
-        } else {
+        }
+        
+        // wp_after_insert_postとの重複を防ぐため、一定時間内の作成をスキップ
+        $recent_create_flag = get_transient('ofwn_recent_create_' . $post_id);
+        if ($recent_create_flag) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] Proceeding with new CPT creation: hash changed');
+                error_log('[OFWN SAVE_POST] SKIP: Recent creation detected, avoiding duplicate');
             }
+            return;
+        }
+        
+        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            error_log('[OFWN SAVE_POST] Proceeding with CPT creation: hash changed');
         }
         
         // 作業メモCPT作成または更新処理
@@ -1170,6 +1179,9 @@ class OF_Work_Notes {
                 
                 // 全体キャッシュクリア（一覧への即時反映担保）
                 wp_cache_delete('last_changed', 'posts');
+                
+                // 重複防止フラグを設定（5秒間有効）
+                set_transient('ofwn_recent_create_' . $post_id, 1, 5);
                 
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                     error_log('[OFWN] hash synced successfully: ' . substr($current_hash, 0, 8));
@@ -2079,6 +2091,15 @@ class OF_Work_Notes {
             return;
         }
         
+        // save_postとの重複を防ぐため、最近作成されている場合はスキップ
+        $recent_create_flag = get_transient('ofwn_recent_create_' . $post_id);
+        if ($recent_create_flag) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN FINAL_CREATE] SKIP: Recent creation by save_post detected');
+            }
+            return;
+        }
+        
         // 既存の作業メモCPTを確認
         $existing_notes = get_posts([
             'post_type' => self::CPT,
@@ -2144,6 +2165,9 @@ class OF_Work_Notes {
             $existing_cpt_ids[] = $note_id;
             update_post_meta($post_id, '_ofwn_bound_cpt_ids', $existing_cpt_ids);
             update_post_meta($post_id, '_ofwn_bound_cpt_id', $note_id);
+            
+            // 重複防止フラグを設定（5秒間有効）
+            set_transient('ofwn_recent_create_' . $post_id, 1, 5);
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 error_log('[OFWN FINAL_CREATE] SUCCESS: Created CPT ' . $note_id . ' with title: "' . $note_title . '"');
