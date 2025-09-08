@@ -20,11 +20,11 @@ class OF_Work_Notes {
         add_action('save_post', [$this, 'migrate_legacy_meta_to_post_fields'], 10, 2);
         add_action('save_post', [$this, 'capture_quick_note_from_parent'], 20, 2);
         
-        // Gutenberg対応: フロントエンド主導の作業メモ作成に変更
-        // save_postフックは一時的に無効化（JavaScript主導に移行）
-        // add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 50, 2);
-        // add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 50, 2);
-        // add_action('wp_after_insert_post', [$this, 'final_create_work_note_from_meta'], 30, 4);
+        // Gutenberg対応: ハイブリッド方式（save_postフォールバック + JavaScript主導）
+        // save_postフックを再有効化（フォールバックとして機能）
+        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 50, 2);
+        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 50, 2);
+        add_action('wp_after_insert_post', [$this, 'final_create_work_note_from_meta'], 30, 4);
         
         // デバッグ用フックは保持
         add_action('save_post_post', [$this, 'debug_save_timing_early'], 5, 2);
@@ -2194,8 +2194,18 @@ class OF_Work_Notes {
      * 投稿保存後に確実に最新のメタデータでCPTを作成
      */
     public function ajax_create_work_note() {
+        // デバッグログ: リクエスト受信
+        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            error_log('[OFWN AJAX] === AJAX作業メモ作成リクエスト受信 ===');
+            error_log('[OFWN AJAX] $_POST data: ' . print_r($_POST, true));
+        }
+        
         // ノンス検証
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_create_work_note')) {
+        $nonce = $_POST['nonce'] ?? '';
+        if (!wp_verify_nonce($nonce, 'ofwn_create_work_note')) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN AJAX] Nonce verification failed: received="' . $nonce . '"');
+            }
             wp_send_json_error(['message' => 'セキュリティチェックに失敗しました。']);
         }
         

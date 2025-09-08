@@ -107,26 +107,35 @@
                 
                 console.log('Work Notes: AJAX作業メモ作成開始', ajaxData);
                 
-                wp.apiFetch({
-                    path: '/wp-admin/admin-ajax.php',
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams(ajaxData)
-                }).then(response => {
-                    console.log('Work Notes: AJAX作業メモ作成成功', response);
-                    if (response.success && !response.data.duplicate) {
-                        // 成功通知（オプション）
+                // jQuery AJAXを使用（より確実な方法）
+                jQuery.post(window.ajaxurl || '/wp-admin/admin-ajax.php', ajaxData)
+                    .done(function(response) {
+                        console.log('Work Notes: AJAX作業メモ作成成功', response);
+                        if (response.success && !response.data.duplicate) {
+                            // 成功通知
+                            wp.data.dispatch('core/notices').createNotice(
+                                'success',
+                                '作業メモを作成しました: ' + response.data.note_title,
+                                { type: 'snackbar', isDismissible: true }
+                            );
+                        } else if (response.data && response.data.duplicate) {
+                            console.log('Work Notes: 重複のため作成をスキップ');
+                        } else {
+                            console.warn('Work Notes: 作業メモ作成に失敗', response.data?.message || '不明なエラー');
+                        }
+                    })
+                    .fail(function(xhr, status, error) {
+                        console.error('Work Notes: AJAX作業メモ作成エラー', {
+                            status: status,
+                            error: error,
+                            responseText: xhr.responseText
+                        });
                         wp.data.dispatch('core/notices').createNotice(
-                            'success',
-                            '作業メモを作成しました: ' + response.data.note_title,
-                            { type: 'snackbar' }
+                            'error',
+                            '作業メモの作成に失敗しました: ' + error,
+                            { type: 'snackbar', isDismissible: true }
                         );
-                    }
-                }).catch(error => {
-                    console.error('Work Notes: AJAX作業メモ作成エラー', error);
-                });
+                    });
             }, 500); // 0.5秒後に実行
         };
         
@@ -201,20 +210,21 @@
         );
         const wasSaving = wp.element.useRef(false);
         
-        useEffect(() => {
-            // 保存完了時（isSaving: true → false）にAJAX実行
-            if (wasSaving.current && !isSaving) {
-                const workTitle = meta?._ofwn_work_title || '';
-                const workContent = meta?._ofwn_work_content || '';
-                
-                // 作業タイトルまたは作業内容がある場合のみ実行
-                if (workTitle || workContent) {
-                    console.log('Work Notes: 投稿保存完了 - AJAX作業メモ作成を開始');
-                    createWorkNoteViaAjax(workTitle, workContent);
-                }
-            }
-            wasSaving.current = isSaving;
-        }, [isSaving, meta?._ofwn_work_title, meta?._ofwn_work_content]);
+        // AJAX作業メモ作成は一時的に無効化（save_postフックを優先）
+        // useEffect(() => {
+        //     // 保存完了時（isSaving: true → false）にAJAX実行
+        //     if (wasSaving.current && !isSaving) {
+        //         const workTitle = meta?._ofwn_work_title || '';
+        //         const workContent = meta?._ofwn_work_content || '';
+        //         
+        //         // 作業タイトルまたは作業内容がある場合のみ実行
+        //         if (workTitle || workContent) {
+        //             console.log('Work Notes: 投稿保存完了 - AJAX作業メモ作成を開始');
+        //             createWorkNoteViaAjax(workTitle, workContent);
+        //         }
+        //     }
+        //     wasSaving.current = isSaving;
+        // }, [isSaving, meta?._ofwn_work_title, meta?._ofwn_work_content]);
         
         // 依頼元・担当者のオプション（サーバーから取得）
         const requesterOptions = window.ofwnGutenbergData?.requesters || [];
