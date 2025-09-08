@@ -844,7 +844,13 @@ class OF_Work_Notes {
             return;
         }
         
-        // 作業メモ関連のメタデータを取得
+        // 作業メモ関連のメタデータを取得（RESTリクエスト時はキャッシュクリア後再取得）
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            // RESTリクエスト時はメタデータキャッシュをクリアして最新値を取得
+            wp_cache_delete($post_id, 'post_meta');
+            clean_post_cache($post_id);
+        }
+        
         $target_type = get_post_meta($post_id, '_ofwn_target_type', true);
         $target_id = get_post_meta($post_id, '_ofwn_target_id', true);
         $target_label = get_post_meta($post_id, '_ofwn_target_label', true);
@@ -853,7 +859,7 @@ class OF_Work_Notes {
         $status = get_post_meta($post_id, '_ofwn_status', true);
         $work_date = get_post_meta($post_id, '_ofwn_work_date', true);
         
-        // 新規追加: 作業タイトルと作業内容を取得
+        // 新規追加: 作業タイトルと作業内容を取得（キャッシュクリア後）
         $work_title_check = get_post_meta($post_id, '_ofwn_work_title', true);
         $work_content_check = get_post_meta($post_id, '_ofwn_work_content', true);
         
@@ -869,8 +875,15 @@ class OF_Work_Notes {
             error_log('[OFWN SAVE_ANALYSIS] === 保存処理開始 ===');
             error_log('[OFWN SAVE_ANALYSIS] Post ID: ' . $post_id . ', Type: ' . $post->post_type . ', Status: ' . $post_status);
             error_log('[OFWN SAVE_ANALYSIS] Context: Action=' . $current_action . ', Autosave=' . $doing_autosave . ', REST=' . $is_rest . ', Revision=' . $is_revision . ', CanEdit=' . $can_edit);
-            error_log('[OFWN SAVE_ANALYSIS] Work meta: title="' . $work_title_check . '", content="' . $work_content_check . '"');
-            error_log('[OFWN SAVE_ANALYSIS] Other meta: requester="' . $requester . '", worker="' . $worker . '", status="' . $status . '"');
+            error_log('[OFWN META_RETRIEVAL] Work meta RETRIEVED: title="' . $work_title_check . '", content="' . $work_content_check . '"');
+            error_log('[OFWN META_RETRIEVAL] Other meta: requester="' . $requester . '", worker="' . $worker . '", status="' . $status . '"');
+            
+            // RESTリクエスト時は$_POSTのメタも確認
+            if ($is_rest === 'true' && isset($_POST['meta'])) {
+                $rest_work_title = $_POST['meta']['_ofwn_work_title'] ?? 'not_set';
+                $rest_work_content = $_POST['meta']['_ofwn_work_content'] ?? 'not_set';
+                error_log('[OFWN META_RETRIEVAL] REST $_POST meta: title="' . $rest_work_title . '", content="' . $rest_work_content . '"');
+            }
             
             // RESTリクエストのメタデータを確認
             if ($is_rest && isset($_POST['meta'])) {
@@ -1038,7 +1051,21 @@ class OF_Work_Notes {
             $need_force_update = false;
             
             if ($note_id) {
-                // 最終的な値を先に算出
+                // 最終的な値を先に算出（メタデータを再取得して最新値を使用）
+                if (defined('REST_REQUEST') && REST_REQUEST) {
+                    // RESTリクエスト時はメタデータを再取得
+                    wp_cache_delete($post_id, 'post_meta');
+                    $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+                    $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+                    
+                    if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                        error_log('[OFWN FORCE_UPDATE] Re-retrieved meta: title="' . $work_title . '", content="' . $work_content . '"');
+                    }
+                } else {
+                    $work_title = $work_title_check;
+                    $work_content = $work_content_check;
+                }
+                
                 $user_work_title = $work_title ?: $target_label ?: '';
                 $user_work_content = $work_content ?: '';
                 
@@ -1057,6 +1084,8 @@ class OF_Work_Notes {
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                     $title_match = $cpt_title === $final_note_title ? 'match' : 'diff';
                     $content_match = $cpt_content === $final_note_content ? 'match' : 'diff';
+                    error_log('[OFWN FORCE_UPDATE] Comparison: cpt_title="' . $cpt_title . '" vs final_title="' . $final_note_title . '" (' . $title_match . ')');
+                    error_log('[OFWN FORCE_UPDATE] Comparison: cpt_content="' . substr($cpt_content, 0, 50) . '..." vs final_content="' . substr($final_note_content, 0, 50) . '..." (' . $content_match . ')');
                     error_log('[OFWN] content-check: title=' . $title_match . ' content=' . $content_match . ' force_update=' . ($need_force_update ? 'true' : 'false'));
                 }
             }
