@@ -979,17 +979,20 @@ class OF_Work_Notes {
         $is_first_creation = empty($existing_notes);
         
         // ハッシュが同じなら重複防止でスキップ（ただし初回作成は除く）
+        $hash_result = ($current_hash === $last_hash) ? 'same' : 'diff';
+        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            error_log('[OFWN] hash current=' . substr($current_hash, 0, 8) . ' last=' . substr($last_hash ?: 'none', 0, 8) . ' result=' . $hash_result);
+        }
+        
         if (!$is_first_creation && $current_hash === $last_hash) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] SKIP: Hash unchanged (not first creation) - current: ' . substr($current_hash, 0, 8) . ', last: ' . substr($last_hash, 0, 8));
+                error_log('[OFWN SAVE_ANALYSIS] SKIP: Hash unchanged (not first creation)');
             }
             return;
         } else {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 $reason = $is_first_creation ? 'first creation' : 'hash changed';
                 error_log('[OFWN SAVE_ANALYSIS] Proceeding with CPT creation/update: ' . $reason);
-                error_log('[OFWN SAVE_ANALYSIS] Hash - current: ' . substr($current_hash, 0, 8) . ', last: ' . substr($last_hash ?: 'none', 0, 8));
-                error_log('[OFWN SAVE_ANALYSIS] Hash payload: ' . wp_json_encode($meta_payload));
             }
         }
         
@@ -1024,17 +1027,24 @@ class OF_Work_Notes {
         
         // 既存CPTがある場合は更新、ない場合は新規作成
         if (!$is_first_creation && !empty($existing_notes)) {
-            // 既存CPTを更新
+            // 既存CPTを更新（案A：post_dateを現在時刻に更新して最新順に表示）
             $note_id = $existing_notes[0]->ID;
+            $current_time = current_time('mysql');
+            $current_time_gmt = current_time('mysql', 1);
+            
             $updated_post = wp_update_post([
                 'ID' => $note_id,
                 'post_title' => $note_title,
                 'post_content' => $note_content,
+                'post_date' => $current_time,
+                'post_date_gmt' => $current_time_gmt,
+                'post_modified' => $current_time,
+                'post_modified_gmt' => $current_time_gmt,
             ], true);
             
             if (!is_wp_error($updated_post)) {
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN SAVE_ANALYSIS] === CPT更新成功 === ID: ' . $note_id . ', Title: "' . $note_title . '"');
+                    error_log('[OFWN] updated note id=' . $note_id . ' title="' . $note_title . '" date=' . $current_time . ' reason=meta_changed');
                 }
             } else {
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
@@ -1077,18 +1087,19 @@ class OF_Work_Notes {
             update_post_meta($note_id, '_ofwn_bound_post_id', $post_id);
             
             // 重複防止用ハッシュを親投稿に保存
-            update_post_meta($post_id, '_ofwn_last_sync_hash', $current_hash);
+            $hash_sync_result = update_post_meta($post_id, '_ofwn_last_sync_hash', $current_hash);
+            if (!$hash_sync_result && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN] hash-sync failed for post ' . $post_id);
+            }
             
-            // デバッグログ（新フィールド情報も含める）
-            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                $elapsed_time = microtime(true) - ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true));
-                error_log('[OFWN TIMING] Auto-created work note ID: ' . $note_id . ' for post ID: ' . $post_id . ' (elapsed: ' . round($elapsed_time * 1000, 2) . 'ms)');
-                error_log('[OFWN TIMING] auto-create transfer: src post=' . $post_id . ' -> note=' . $note_id . ', title="' . $work_title_from_post . '", content="' . $work_content_from_post . '"');
-                if (!empty($existing_title) || !empty($existing_content)) {
-                    error_log('[OFWN TIMING] Transfer skipped: existing title="' . $existing_title . '", existing content="' . $existing_content . '"');
-                } else {
-                    error_log('[OFWN TIMING] Transfer executed: new title="' . $work_title_from_post . '", new content="' . $work_content_from_post . '"');
-                }
+            // キャッシュクリア処理（一覧への即時反映担保）
+            clean_post_cache($note_id);
+            wp_cache_delete('last_changed', 'posts');
+            
+            // 並び戦略をログ出力（案A採用を明記）
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG && !get_transient('ofwn_strategy_logged')) {
+                error_log('[OFWN] orderby=date strategy=A (post_date updated to current time)');
+                set_transient('ofwn_strategy_logged', 1, HOUR_IN_SECONDS);
             }
         }
     }
