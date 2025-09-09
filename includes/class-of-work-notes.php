@@ -278,7 +278,7 @@ class OF_Work_Notes {
                     
                     $.post(ajaxurl, {
                         action: 'ofwn_check_distribution',
-                        nonce: '<?php echo wp_create_nonce('ofwn_distribution_check'); ?>'
+                        nonce: '<?php echo esc_attr(wp_create_nonce('ofwn_distribution_check')); ?>'
                     }, function(response) {
                         if (response.success) {
                             $result.html('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
@@ -764,7 +764,7 @@ class OF_Work_Notes {
                 echo '<div class="ofwn-note-item">';
                 echo '<strong>'.esc_html(get_the_title($n)).'</strong> ';
                 echo '<span class="ofwn-badge ' . esc_attr($status==='完了'?'done':'') . '">' . esc_html($status ?: '—') . '</span><br>';
-                echo wpautop(esc_html($n->post_content));
+                echo wp_kses_post(wpautop(esc_html($n->post_content)));
                 echo '<small>依頼元: '.esc_html($req ?: '—').' / 担当: '.esc_html($worker ?: '—').' / 実施日: '.esc_html($date ?: '—').'</small>';
                 echo ' / <a href="'.esc_url(get_edit_post_link($n->ID)).'">' . esc_html__('編集', 'work-notes') . '</a>';
                 echo '</div>';
