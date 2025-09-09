@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       Work Notes（作業メモ）
+ * Plugin Name:       Work Notes
  * Description:       クライアント指示や更新作業のメモをWP内で記録。投稿や固定ページに紐づけ、一覧管理できます。依頼元/担当者のマスター管理＆セレクト、管理画面の「作業一覧」付き。
  * Version:           1.0.2
  * Author:            Netservice

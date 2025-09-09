@@ -1,6 +1,6 @@
 === Work Notes ===
 Contributors: netservice
-Tags: notes, workflow, task-management, admin, snackbar, gutenberg
+Tags: notes, workflow, task-management, admin, gutenberg
 Requires at least: 6.0
 Tested up to: 6.8
 Stable tag: 1.0.2
