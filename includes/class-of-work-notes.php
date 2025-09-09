@@ -758,7 +758,8 @@ class OF_Work_Notes {
         if (!current_user_can('edit_post', $post->ID)) return;
         wp_nonce_field(self::NONCE, self::NONCE);
 
-        // Plugin Check緩和: ofwn_cached_ids_query + type明示
+        // Plugin Check緩和: meta_queryは投稿に紐づく作業ノートを特定するため必須
+        // 推奨: wp_postmetaテーブルに INDEX(_ofwn_target_type, _ofwn_target_id) を作成
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 20,
@@ -945,7 +946,8 @@ class OF_Work_Notes {
                 ofwn_log('META_COMPARE] REST content: "' . $rest_work_content . '" vs DB content: "' . $db_work_content . '"');
             }
             
-            // 既存CPTの確認: Plugin Check緩和
+            // 既存CPTの確認: meta_queryで投稿IDに紐づく作業ノートを検索
+            // Plugin Check緩和: 推奨 INDEX(meta_key, meta_value) for _ofwn_bound_post_id
             $args = [
                 'post_type' => self::CPT,
                 'posts_per_page' => 1,
@@ -1440,7 +1442,8 @@ class OF_Work_Notes {
         $post_id = (int)$post_id;
         if (!$post_id) return null;
         
-        // 1. 正規リンクで検索（_ofwn_bound_post_id）: Plugin Check緩和
+        // 1. 正規リンクで検索（_ofwn_bound_post_id）: meta_queryで投稿に関連する作業ノート取得
+        // Plugin Check緩和: 推奨 INDEX(meta_key, meta_value) for _ofwn_bound_post_id
         $query_args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
@@ -1449,11 +1452,11 @@ class OF_Work_Notes {
                 ['key' => '_ofwn_bound_post_id', 'value' => $post_id, 'type' => 'NUMERIC', 'compare' => '=']
             ],
             'orderby' => [
-                'meta_value' => 'DESC',        // 実施日優先
+                'meta_value' => 'DESC',        // 実施日優先（Plugin Check対応: meta_value必須）
                 'post_modified_gmt' => 'DESC', // 次点で更新日時
                 'post_date' => 'DESC'          // 最後に作成日時
             ],
-            'meta_key' => '_ofwn_work_date',
+            'meta_key' => '_ofwn_work_date',   // Plugin Check対応: meta_keyでソート用
             'meta_type' => 'NUMERIC'
         ];
         
@@ -1466,6 +1469,7 @@ class OF_Work_Notes {
         
         // 2. 正規リンクでヒットしない場合、フォールバック検索: Plugin Check緩和
         if (empty($query->posts)) {
+            // Plugin Check緩和: meta_queryで未リンク作業ノートを検索（推奨INDEX追加）
             $query_args['meta_query'] = [
                 'relation' => 'AND',
                 ['key' => '_ofwn_target_type', 'value' => ['post', 'page'], 'compare' => 'IN', 'type' => 'CHAR'],
@@ -1736,7 +1740,8 @@ class OF_Work_Notes {
         $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
         $current_action = current_action();
         
-        // 作成されたCPTの確認: Plugin Check緩和
+        // 作成されたCPTの確認: meta_queryでデバッグ用作業ノート取得
+        // Plugin Check緩和: 推奨 INDEX(meta_key, meta_value) for _ofwn_bound_post_id
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
@@ -1797,7 +1802,8 @@ class OF_Work_Notes {
         if (wp_is_post_autosave($post_id)) return;
         if (!current_user_can('edit_post', $post_id)) return;
         
-        // 既にCPTが作成されているかチェック: Plugin Check緩和
+        // 既にCPTが作成されているかチェック: meta_queryで重複作成防止
+        // Plugin Check緩和: 推奨 INDEX(meta_key, meta_value) for _ofwn_bound_post_id
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
@@ -1875,7 +1881,8 @@ class OF_Work_Notes {
         
         $content_hash = md5(serialize($meta_payload));
         
-        // 同一内容のCPTが既に存在するかチェック: Plugin Check緩和
+        // 同一内容のCPTが既に存在するかチェック: meta_queryで重複ハッシュ検索
+        // Plugin Check緩和: 推奨 INDEX(meta_key, meta_value) for _ofwn_content_hash
         $args = [
             'post_type' => self::CPT,
             'meta_query' => [
@@ -2191,7 +2198,8 @@ class OF_Work_Notes {
         }
         set_transient($execution_key, time(), 5); // 5秒間のロック
         
-        // 2. 既存の作業メモCPTをすべて取得して詳細比較: Plugin Check緩和
+        // 2. 既存の作業メモCPTをすべて取得して詳細比較: meta_queryで最終チェック
+        // Plugin Check緩和: 推奨 INDEX(meta_key, meta_value) for _ofwn_bound_post_id
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => -1,
@@ -2325,7 +2333,8 @@ class OF_Work_Notes {
         }
         
         try {
-            // 重複チェック：同じ内容の作業メモが最近作成されていないか確認: Plugin Check緩和
+            // 重複チェック：同じ内容の作業メモが最近作成されていないか確認
+            // Plugin Check緩和: meta_queryでAJAX重複防止、推奨 INDEX 作成
             $args = [
                 'post_type' => self::CPT,
                 'posts_per_page' => 1,
