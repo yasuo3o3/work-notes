@@ -2,8 +2,15 @@
 if (!defined('ABSPATH')) exit;
 
 /**
- * Work Notes プラグイン用アップデートチェッカー
- * /updates/ 仮想ルートを使用してアップデートを確認
+ * Work Notes プラグイン用アップデートチェッカー（無効化済み）
+ * 
+ * WordPress.org配布基準に合わせて独自アップデート機能を削除。
+ * Plugin Check の plugin_updater_detected / update_modification_detected 警告を解消。
+ * 
+ * 注記：
+ * - pre_set_site_transient_update_plugins フックの使用は WordPress.org では禁止
+ * - 独自アップデートURLやダウンロード機能も同様に削除が必要
+ * - 開発環境でのみ更新通知が必要な場合は、別途安全な方法で実装すること
  */
 class OFWN_Updater {
     private $plugin_file;
@@ -15,114 +22,45 @@ class OFWN_Updater {
         $this->plugin_slug = plugin_basename($plugin_file);
         $this->version = $version;
         
-        add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_update']);
-        add_filter('plugins_api', [$this, 'plugin_info'], 10, 3);
+        // WordPress.org配布基準のため、独自アップデーター機能は無効化
+        // add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_update']); // 削除済み
+        // add_filter('plugins_api', [$this, 'plugin_info'], 10, 3); // 削除済み
+        
+        // 開発環境でのみ更新通知を表示する場合の例（安全な方法）
+        if (defined('WP_DEBUG') && WP_DEBUG && current_user_can('manage_options')) {
+            add_action('admin_notices', [$this, 'dev_update_notice']);
+        }
     }
     
     /**
-     * アップデートチェック
+     * 開発環境専用：更新通知（WordPress.org配布基準に準拠）
      */
-    public function check_for_update($transient) {
-        if (empty($transient->checked[$this->plugin_slug])) {
-            return $transient;
+    public function dev_update_notice() {
+        // 開発環境でのみ表示される静的な更新確認メッセージ
+        // 実際のアップデート処理は行わない
+        if (get_transient('ofwn_dev_update_notice_dismissed')) {
+            return;
         }
         
-        $remote_version = $this->get_remote_version();
-        if (!$remote_version) {
-            return $transient;
-        }
+        echo '<div class="notice notice-info is-dismissible">';
+        echo '<p><strong>Work Notes (開発版)</strong>: ';
+        echo 'プラグインの最新版は <a href="https://github.com/your-repo" target="_blank">GitHub</a> で確認できます。';
+        echo '</p>';
+        echo '</div>';
         
-        if (version_compare($this->version, $remote_version['version'], '<')) {
-            $transient->response[$this->plugin_slug] = (object) [
-                'slug' => dirname($this->plugin_slug),
-                'plugin' => $this->plugin_slug,
-                'new_version' => $remote_version['version'],
-                'url' => $remote_version['details_url'] ?? home_url(),
-                'package' => $remote_version['download_url'],
-                'tested' => $remote_version['tested'] ?? get_bloginfo('version'),
-                'requires' => $remote_version['requires'] ?? '6.0',
-                'requires_php' => $remote_version['requires_php'] ?? '8.0',
-            ];
-        }
-        
-        return $transient;
+        // 24時間後に再表示
+        set_transient('ofwn_dev_update_notice_dismissed', true, DAY_IN_SECONDS);
     }
     
-    /**
-     * プラグイン情報取得
+    /* 
+     * === 以下、WordPress.org配布基準により削除された機能 ===
+     * 
+     * check_for_update() - pre_set_site_transient_update_plugins フック使用のため削除
+     * plugin_info() - plugins_api フックでの独自情報提供のため削除  
+     * get_remote_version() - 独自アップデートURL取得のため削除
+     * 
+     * これらの機能が必要な場合は：
+     * 1. WordPress.org以外での配布専用版で実装
+     * 2. または管理画面での手動チェック機能として実装
      */
-    public function plugin_info($result, $action, $args) {
-        if ('plugin_information' !== $action || dirname($this->plugin_slug) !== $args->slug) {
-            return $result;
-        }
-        
-        $remote_version = $this->get_remote_version();
-        if (!$remote_version) {
-            return $result;
-        }
-        
-        return (object) [
-            'name' => $remote_version['name'] ?? 'Work Notes',
-            'slug' => dirname($this->plugin_slug),
-            'version' => $remote_version['version'],
-            'author' => $remote_version['author'] ?? 'Netservice',
-            'author_profile' => $remote_version['author_profile'] ?? 'https://netservice.jp/',
-            'homepage' => $remote_version['homepage'] ?? home_url(),
-            'requires' => $remote_version['requires'] ?? '6.0',
-            'requires_php' => $remote_version['requires_php'] ?? '8.0',
-            'tested' => $remote_version['tested'] ?? get_bloginfo('version'),
-            'downloaded' => 0,
-            'last_updated' => $remote_version['last_updated'] ?? date('Y-m-d'),
-            'sections' => [
-                'description' => $remote_version['description'] ?? __('作業メモ管理プラグイン', 'work-notes'),
-                'changelog' => $remote_version['changelog'] ?? __('更新履歴は README をご確認ください。', 'work-notes'),
-            ],
-            'download_link' => $remote_version['download_url'],
-        ];
-    }
-    
-    /**
-     * リモートバージョン情報を取得
-     */
-    private function get_remote_version() {
-        $channel = get_option(OF_Work_Notes::OPT_UPDATE_CHANNEL, 'stable');
-        $cache_key = 'ofwn_update_info_' . $channel;
-        
-        // キャッシュから取得 (1時間)
-        $cached = get_transient($cache_key);
-        if (false !== $cached) {
-            return $cached;
-        }
-        
-        // 仮想配布ルートから取得 (最優先)
-        $update_url = home_url('/updates/' . $channel . '.json');
-        $response = wp_remote_get($update_url, [
-            'timeout' => 10,
-            'sslverify' => false,
-        ]);
-        
-        $update_data = null;
-        
-        if (!is_wp_error($response) && 200 === wp_remote_retrieve_response_code($response)) {
-            $body = wp_remote_retrieve_body($response);
-            $update_data = json_decode($body, true);
-        } else {
-            // フォールバック: プラグイン内 updates/ ディレクトリ
-            $fallback_file = OFWN_DIR . 'updates/' . $channel . '.json';
-            if (file_exists($fallback_file)) {
-                $body = file_get_contents($fallback_file);
-                $update_data = json_decode($body, true);
-            }
-        }
-        
-        if ($update_data && isset($update_data['version'])) {
-            // キャッシュに保存 (1時間)
-            set_transient($cache_key, $update_data, HOUR_IN_SECONDS);
-            return $update_data;
-        }
-        
-        // エラー時は短時間キャッシュ (5分)
-        set_transient($cache_key, false, 5 * MINUTE_IN_SECONDS);
-        return false;
-    }
 }
