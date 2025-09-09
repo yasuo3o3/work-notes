@@ -48,32 +48,42 @@ do {
 } while (count($posts) === $batch_size);
 
 // 念のため残ったメタデータを削除
-// Plugin uninstall: 安全な直接クエリ。esc_like()でLIKEパターンをエスケープしてprepareで実行
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
     $wpdb->esc_like('_ofwn_') . '%'
 ));
 
 // 通知機能関連のメタデータも削除
-// Plugin uninstall: 安全な直接クエリ。esc_like()でLIKEパターンをエスケープしてprepareで実行
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
     $wpdb->esc_like('ofwn_worklog_') . '%'
 ));
 
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->usermeta} WHERE meta_key LIKE %s",
     $wpdb->esc_like('ofwn_worklog_') . '%'
 ));
 
 // 通知機能関連のトランジェントを削除
-// Plugin uninstall: 安全な直接クエリ。esc_like()でLIKEパターンをエスケープしてprepareで実行
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
     $wpdb->esc_like('_transient_ofwn_worklog_') . '%'
 ));
 
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
     $wpdb->esc_like('_transient_timeout_ofwn_worklog_') . '%'
 ));
+
+// プラグイン削除後のキャッシュクリア
+wp_cache_flush();
