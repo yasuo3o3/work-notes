@@ -152,22 +152,23 @@ class OFWN_List_Table extends WP_List_Table {
 
         $meta_query = ['relation'=>'AND'];
 
+        // Plugin Check対策: meta_query に compare/type を明示
         if (!empty($_GET['status'])) {
-            $meta_query[] = ['key'=>'_ofwn_status','value'=>sanitize_text_field($_GET['status'])];
+            $meta_query[] = ['key'=>'_ofwn_status','value'=>sanitize_text_field($_GET['status']),'compare'=>'=','type'=>'CHAR'];
         }
         if (!empty($_GET['requester'])) {
-            $meta_query[] = ['key'=>'_ofwn_requester','value'=>sanitize_text_field($_GET['requester'])];
+            $meta_query[] = ['key'=>'_ofwn_requester','value'=>sanitize_text_field($_GET['requester']),'compare'=>'=','type'=>'CHAR'];
         }
         if (!empty($_GET['worker'])) {
-            $meta_query[] = ['key'=>'_ofwn_worker','value'=>sanitize_text_field($_GET['worker'])];
+            $meta_query[] = ['key'=>'_ofwn_worker','value'=>sanitize_text_field($_GET['worker']),'compare'=>'=','type'=>'CHAR'];
         }
         if (!empty($_GET['target_type'])) {
-            $meta_query[] = ['key'=>'_ofwn_target_type','value'=>sanitize_text_field($_GET['target_type'])];
+            $meta_query[] = ['key'=>'_ofwn_target_type','value'=>sanitize_text_field($_GET['target_type']),'compare'=>'=','type'=>'CHAR'];
         }
         $from = !empty($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : '';
         $to   = !empty($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : '';
-        if ($from) $meta_query[] = ['key'=>'_ofwn_work_date','value'=>$from,'compare'=>'>='];
-        if ($to)   $meta_query[] = ['key'=>'_ofwn_work_date','value'=>$to,  'compare'=>'<='];
+        if ($from) $meta_query[] = ['key'=>'_ofwn_work_date','value'=>$from,'compare'=>'>=','type'=>'CHAR'];
+        if ($to)   $meta_query[] = ['key'=>'_ofwn_work_date','value'=>$to,'compare'=>'<=','type'=>'CHAR'];
 
         $orderby_arg = 'date';
         if ('ofwn_date' === $orderby) {
@@ -176,6 +177,7 @@ class OFWN_List_Table extends WP_List_Table {
             $orderby_arg = 'title';
         }
 
+        // Plugin Check対策: 高速化フラグ + キャッシュ
         $args = [
             'post_type'      => OF_Work_Notes::CPT,
             'posts_per_page' => $per_page,
@@ -187,9 +189,43 @@ class OFWN_List_Table extends WP_List_Table {
         ];
         if ('ofwn_date' === $orderby) {
             $args['meta_key'] = '_ofwn_work_date';
+            $args['meta_type'] = 'CHAR'; // 日付文字列として扱う
         }
 
-        $q = new WP_Query($args);
+        // 高速化フラグを追加してキャッシュ経由で取得
+        $cache_args = array_merge($args, [
+            'fields'                   => 'ids',
+            'no_found_rows'            => true,
+            'update_post_meta_cache'   => false,
+            'update_post_term_cache'   => false,
+        ]);
+        
+        if (function_exists('ofwn_cached_ids_query')) {
+            $ids = ofwn_cached_ids_query($cache_args, 60);
+        } else {
+            $ckey = 'ofwn_list_tbl_v1_' . md5(wp_json_encode($cache_args));
+            $ids = wp_cache_get($ckey, 'ofwn');
+            if (false === $ids) {
+                $ids = get_posts($cache_args);
+                wp_cache_set($ckey, $ids, 'ofwn', 60);
+            }
+        }
+        
+        // 元の WP_Query 形式で結果を復元
+        if (!empty($ids)) {
+            $posts = get_posts([
+                'post_type'   => OF_Work_Notes::CPT,
+                'post__in'    => $ids,
+                'orderby'     => 'post__in',
+                'numberposts' => count($ids),
+            ]);
+        } else {
+            $posts = [];
+        }
+        
+        // WP_Query オブジェクト形式で包装
+        $q = new stdClass();
+        $q->posts = $posts;
 
         $items = [];
         foreach ($q->posts as $p) {
