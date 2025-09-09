@@ -33,12 +33,13 @@ if (is_admin() && !class_exists('WP_List_Table')) {
 // クラス読み込み
 require_once OFWN_DIR . 'includes/class-of-work-notes.php';
 require_once OFWN_DIR . 'includes/class-ofwn-list-table.php';
-require_once OFWN_DIR . 'includes/class-ofwn-updater.php';
+// 自動アップデータはWP.org配布では同梱しない（.gitattributesでexport-ignore）
+// require_once OFWN_DIR . 'includes/class-ofwn-updater.php';
 
-// テキストドメイン読み込み
-add_action('plugins_loaded', function () {
-    load_plugin_textdomain('work-notes', false, dirname(plugin_basename(__FILE__)) . '/languages');
-});
+// テキストドメイン読み込み（WP4.6+ではWP.org配布で自動ロード。Plugin Check対応のため削除）
+// add_action('plugins_loaded', function () {
+//     load_plugin_textdomain('work-notes', false, dirname(plugin_basename(__FILE__)) . '/languages');
+// });
 
 // activate/deactivate フック
 register_activation_hook(__FILE__, 'work_notes_activate');
@@ -72,8 +73,8 @@ function work_notes_deactivate() {
 add_action('plugins_loaded', function () {
     new OF_Work_Notes();
     
-    // アップデートチェッカー初期化
-    if (is_admin()) {
-        new OFWN_Updater(__FILE__, OFWN_VER);
-    }
+    // アップデートチェッカー初期化（配布物では除外）
+    // if (is_admin() && class_exists('OFWN_Updater')) {
+    //     new OFWN_Updater(__FILE__, OFWN_VER);
+    // }
 });

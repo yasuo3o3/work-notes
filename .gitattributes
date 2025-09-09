@@ -19,3 +19,6 @@
 
 # ドキュメント（Markdown）
 *.md export-ignore
+
+# Plugin Check対応（自動アップデータ除外）
+/includes/class-ofwn-updater.php export-ignore
