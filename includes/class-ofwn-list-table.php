@@ -108,6 +108,7 @@ class OFWN_List_Table extends WP_List_Table {
         $ckey = 'ofwn_list_all_count_v1';
         $all_count = wp_cache_get($ckey, 'ofwn');
         if (false === $all_count) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Safe prepared query for list table pagination
             $all_count = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = %s AND post_status = %s",
                 OF_Work_Notes::CPT,
@@ -121,6 +122,7 @@ class OFWN_List_Table extends WP_List_Table {
         $ckey2 = 'ofwn_list_status_counts_v1';
         $status_counts = wp_cache_get($ckey2, 'ofwn');
         if (false === $status_counts) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Safe prepared query for status counts with caching
             $status_counts = (array) $wpdb->get_results($wpdb->prepare(
                 "SELECT COALESCE(pm.meta_value, %s) as status, COUNT(*) as count 
                  FROM {$wpdb->posts} p 
