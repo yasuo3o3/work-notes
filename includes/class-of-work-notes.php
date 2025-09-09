@@ -2166,7 +2166,12 @@ class OF_Work_Notes {
         
         // 2. $_POSTから取得を試行
         if (empty($work_title) && empty($work_content)) {
-            $meta = wp_unslash($_POST['meta'] ?? []);
+            // $_POST['meta'] を unslash→sanitize（ネスト浅想定）
+            $meta = isset($_POST['meta']) ? wp_unslash($_POST['meta']) : [];
+            $meta = is_array($meta) ? array_map(
+                static function($v){ return is_array($v) ? array_map('sanitize_text_field',$v) : sanitize_text_field($v); },
+                $meta
+            ) : [];
             $work_title = isset($meta['_ofwn_work_title']) ? sanitize_text_field($meta['_ofwn_work_title']) : '';
             $work_content = isset($meta['_ofwn_work_content']) ? wp_kses_post($meta['_ofwn_work_content']) : '';
         }
