@@ -488,7 +488,7 @@ class OFWN_Worklog_Settings {
      */
     public function run_migration() {
         $migrated_version = get_option('ofwn_migrated_version', '0.0.0');
-        $current_version = defined('OFWN_VER') ? OFWN_VER : '1.0.2';
+        $current_version = defined('OFWN_VER') ? OFWN_VER : '1.0.3';
         
         // 通知機能削除マイグレーション（バージョン1.0.3以降）
         if (version_compare($migrated_version, '1.0.3', '<')) {
