@@ -20,10 +20,10 @@ class OF_Work_Notes {
         add_action('save_post', [$this, 'migrate_legacy_meta_to_post_fields'], 10, 2);
         add_action('save_post', [$this, 'capture_quick_note_from_parent'], 20, 2);
         
-        // Gutenberg対応: ハイブリッド方式（save_postフォールバック + JavaScript主導）
-        // save_postフックを再有効化（フォールバックとして機能）
-        add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 50, 2);
-        add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 50, 2);
+        // Gutenberg対応: 一時的に単一フック方式に変更（重複問題解決のため）
+        // wp_after_insert_postのみを使用し、save_postは無効化
+        // add_action('save_post_post', [$this, 'auto_create_work_note_from_meta'], 50, 2);
+        // add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 50, 2);
         add_action('wp_after_insert_post', [$this, 'final_create_work_note_from_meta'], 30, 4);
         
         // デバッグ用フックは保持
@@ -2073,21 +2073,48 @@ class OF_Work_Notes {
             return;
         }
         
-        // 強制的にキャッシュクリアして最新のメタデータを取得
-        wp_cache_delete($post_id, 'post_meta');
-        clean_post_cache($post_id);
-        wp_cache_flush(); // 全キャッシュクリア
+        // === 重要: 複数ソースからメタデータを取得して最新値を特定 ===
+        $work_title = '';
+        $work_content = '';
         
-        // 少し待機してメタデータ保存を確実にする
-        usleep(100000); // 0.1秒待機
+        // 1. REST APIリクエストから直接取得を試行
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            $request_body = file_get_contents('php://input');
+            if ($request_body) {
+                $decoded = json_decode($request_body, true);
+                if (isset($decoded['meta'])) {
+                    $work_title = $decoded['meta']['_ofwn_work_title'] ?? '';
+                    $work_content = $decoded['meta']['_ofwn_work_content'] ?? '';
+                }
+            }
+        }
         
-        // 最新のメタデータを取得
-        $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
-        $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        // 2. $_POSTから取得を試行
+        if (empty($work_title) && empty($work_content)) {
+            $work_title = $_POST['meta']['_ofwn_work_title'] ?? '';
+            $work_content = $_POST['meta']['_ofwn_work_content'] ?? '';
+        }
+        
+        // 3. 最終手段: データベースから取得（キャッシュクリア後）
+        if (empty($work_title) && empty($work_content)) {
+            wp_cache_delete($post_id, 'post_meta');
+            clean_post_cache($post_id);
+            
+            // 短時間待機してメタデータ保存の完了を待つ
+            usleep(200000); // 0.2秒待機
+            
+            $work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+            $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+        }
+        
+        // データのクリーニング
+        $work_title = trim(strip_tags($work_title));
+        $work_content = trim(strip_tags($work_content));
         
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
             error_log('[OFWN FINAL_CREATE] === wp_after_insert_post実行 ===');
             error_log('[OFWN FINAL_CREATE] Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false'));
+            error_log('[OFWN FINAL_CREATE] REST: ' . (defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false'));
             error_log('[OFWN FINAL_CREATE] Retrieved work_title: "' . $work_title . '", work_content: "' . $work_content . '"');
         }
         
@@ -2099,19 +2126,24 @@ class OF_Work_Notes {
             return;
         }
         
-        // save_postとの重複を防ぐため、最近作成されている場合はスキップ
-        $recent_create_flag = get_transient('ofwn_recent_create_' . $post_id);
-        if ($recent_create_flag) {
+        // === 改善された重複チェック ===
+        
+        // 1. 短時間内の重複実行を防ぐ
+        $execution_key = 'ofwn_execution_' . $post_id . '_' . md5($work_title . $work_content);
+        if (get_transient($execution_key)) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN FINAL_CREATE] SKIP: Recent creation by save_post detected');
+                error_log('[OFWN FINAL_CREATE] SKIP: Same content execution within last 5 seconds');
             }
             return;
         }
+        set_transient($execution_key, time(), 5); // 5秒間のロック
         
-        // 既存の作業メモCPTを確認
+        // 2. 既存の作業メモCPTをすべて取得して詳細比較
         $existing_notes = get_posts([
             'post_type' => self::CPT,
             'posts_per_page' => -1,
+            'orderby' => 'date',
+            'order' => 'DESC',
             'meta_query' => [
                 [
                     'key' => '_ofwn_bound_post_id',
@@ -2121,15 +2153,25 @@ class OF_Work_Notes {
             ]
         ]);
         
-        // 最新のCPTと比較して、同じ内容なら作成しない
+        // 3. 最新のCPTと比較（内容の正規化を行って比較）
         if (!empty($existing_notes)) {
-            $latest_note = $existing_notes[0];
-            $latest_title = get_post_field('post_title', $latest_note->ID);
-            $latest_content = get_post_field('post_content', $latest_note->ID);
+            foreach ($existing_notes as $existing_note) {
+                $existing_title = trim(strip_tags(get_post_field('post_title', $existing_note->ID)));
+                $existing_content = trim(strip_tags(get_post_field('post_content', $existing_note->ID)));
+                
+                // 正規化して比較
+                if ($existing_title === $work_title && $existing_content === $work_content) {
+                    if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                        error_log('[OFWN FINAL_CREATE] SKIP: Identical content found in existing CPT #' . $existing_note->ID);
+                    }
+                    return;
+                }
+            }
             
-            if ($latest_title === $work_title && $latest_content === $work_content) {
+            // 作成数の制限チェック（同一投稿に対して10個以上は作成しない）
+            if (count($existing_notes) >= 10) {
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN FINAL_CREATE] Content matches latest CPT, skipping creation');
+                    error_log('[OFWN FINAL_CREATE] SKIP: Too many work notes (' . count($existing_notes) . ') for post #' . $post_id);
                 }
                 return;
             }

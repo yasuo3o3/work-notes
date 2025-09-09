@@ -14,6 +14,8 @@ class OFWN_Worklog_Settings {
         
         // AJAX ハンドラー追加
         add_action('wp_ajax_ofwn_clear_cache', [$this, 'ajax_clear_cache']);
+        add_action('wp_ajax_ofwn_cleanup_old_meta', [$this, 'ajax_cleanup_old_meta']);
+        add_action('wp_ajax_ofwn_debug_meta_status', [$this, 'ajax_debug_meta_status']);
         
         // マイグレーション処理（通知機能削除）
         add_action('plugins_loaded', [$this, 'run_migration'], 1);
@@ -162,6 +164,24 @@ class OFWN_Worklog_Settings {
                 <div id="ofwn-cache-result" style="margin-top: 10px;"></div>
             </div>
             
+            <hr>
+            
+            <h2><?php esc_html_e('データクリーンアップ', 'work-notes'); ?></h2>
+            <p><?php esc_html_e('古いメタデータや重複した作業メモCPTを削除します。', 'work-notes'); ?></p>
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                <strong>注意:</strong> この操作は孤立したメタデータ、重複したCPT、空のメタデータを削除します。実行前にバックアップを取ることをお勧めします。
+            </div>
+            
+            <div id="ofwn-cleanup">
+                <button type="button" id="ofwn-debug-meta-btn" class="button">
+                    <?php esc_html_e('データ状況を確認', 'work-notes'); ?>
+                </button>
+                <button type="button" id="ofwn-cleanup-meta-btn" class="button button-secondary">
+                    <?php esc_html_e('古いデータをクリーンアップ', 'work-notes'); ?>
+                </button>
+                <div id="ofwn-cleanup-result" style="margin-top: 10px;"></div>
+            </div>
+            
             <script>
             jQuery(document).ready(function($) {
                 $('#ofwn-check-distribution-btn').on('click', function() {
@@ -208,6 +228,89 @@ class OFWN_Worklog_Settings {
                         $result.html('<div class="notice notice-error inline"><p><?php esc_html_e('キャッシュクリアに失敗しました。', 'work-notes'); ?></p></div>');
                     }).always(function() {
                         $btn.prop('disabled', false).text('<?php esc_html_e('キャッシュをクリア', 'work-notes'); ?>');
+                    });
+                });
+                
+                // データ状況確認機能
+                $('#ofwn-debug-meta-btn').on('click', function() {
+                    var $btn = $(this);
+                    var $result = $('#ofwn-cleanup-result');
+                    
+                    $btn.prop('disabled', true).text('<?php esc_html_e('確認中...', 'work-notes'); ?>');
+                    $result.html('');
+                    
+                    $.post(ajaxurl, {
+                        action: 'ofwn_debug_meta_status',
+                        nonce: '<?php echo wp_create_nonce('ofwn_debug_meta'); ?>'
+                    }, function(response) {
+                        if (response.success) {
+                            var data = response.data;
+                            var html = '<div class="notice notice-info inline"><h4>データ状況:</h4>';
+                            
+                            html += '<h5>メタデータ統計:</h5><ul>';
+                            $.each(data.meta_statistics, function(key, count) {
+                                html += '<li>' + key + ': ' + count + '件</li>';
+                            });
+                            html += '</ul>';
+                            
+                            html += '<h5>作業メモCPT統計:</h5>';
+                            html += '<p>合計CPT: ' + (data.cpt_statistics.total_cpts || 0) + '件 / ';
+                            html += '紐づけられた親投稿: ' + (data.cpt_statistics.unique_parents || 0) + '件</p>';
+                            
+                            if (data.duplicate_cpts && data.duplicate_cpts.length > 0) {
+                                html += '<h5>重複CPT:</h5><ul>';
+                                $.each(data.duplicate_cpts, function(i, dup) {
+                                    html += '<li>投稿ID ' + dup.parent_id + ': ' + dup.cpt_count + '個のCPT</li>';
+                                });
+                                html += '</ul>';
+                            }
+                            
+                            html += '</div>';
+                            $result.html(html);
+                        } else {
+                            $result.html('<div class="notice notice-error inline"><p>' + response.data.message + '</p></div>');
+                        }
+                    }).fail(function() {
+                        $result.html('<div class="notice notice-error inline"><p><?php esc_html_e('データ確認に失敗しました。', 'work-notes'); ?></p></div>');
+                    }).always(function() {
+                        $btn.prop('disabled', false).text('<?php esc_html_e('データ状況を確認', 'work-notes'); ?>');
+                    });
+                });
+                
+                // クリーンアップ機能
+                $('#ofwn-cleanup-meta-btn').on('click', function() {
+                    if (!confirm('古いデータのクリーンアップを実行しますか？この操作は元に戻せません。')) {
+                        return;
+                    }
+                    
+                    var $btn = $(this);
+                    var $result = $('#ofwn-cleanup-result');
+                    
+                    $btn.prop('disabled', true).text('<?php esc_html_e('クリーンアップ中...', 'work-notes'); ?>');
+                    $result.html('');
+                    
+                    $.post(ajaxurl, {
+                        action: 'ofwn_cleanup_old_meta',
+                        nonce: '<?php echo wp_create_nonce('ofwn_cleanup_old_meta'); ?>'
+                    }, function(response) {
+                        if (response.success) {
+                            var html = '<div class="notice notice-success inline"><p>' + response.data.message + '</p>';
+                            if (response.data.cleaned_items && response.data.cleaned_items.length > 0) {
+                                html += '<ul>';
+                                $.each(response.data.cleaned_items, function(i, item) {
+                                    html += '<li>' + item + '</li>';
+                                });
+                                html += '</ul>';
+                            }
+                            html += '</div>';
+                            $result.html(html);
+                        } else {
+                            $result.html('<div class="notice notice-error inline"><p>' + response.data.message + '</p></div>');
+                        }
+                    }).fail(function() {
+                        $result.html('<div class="notice notice-error inline"><p><?php esc_html_e('クリーンアップに失敗しました。', 'work-notes'); ?></p></div>');
+                    }).always(function() {
+                        $btn.prop('disabled', false).text('<?php esc_html_e('古いデータをクリーンアップ', 'work-notes'); ?>');
                     });
                 });
             });
@@ -389,6 +492,207 @@ class OFWN_Worklog_Settings {
                 DELETE FROM {$wpdb->options} 
                 WHERE option_name LIKE %s
             ", '_transient_timeout_' . $pattern));
+        }
+    }
+    
+    /**
+     * 古いメタデータクリーンアップ（AJAX）
+     */
+    public function ajax_cleanup_old_meta() {
+        // ノンス検証
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_cleanup_old_meta')) {
+            wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
+        }
+        
+        // 権限チェック
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('この操作を実行する権限がありません。', 'work-notes')]);
+        }
+        
+        try {
+            global $wpdb;
+            $cleaned_items = [];
+            
+            // 1. 孤立した作業メモメタデータ（親投稿が存在しないもの）をクリーンアップ
+            $orphan_meta_keys = ['_ofwn_work_title', '_ofwn_work_content', '_ofwn_target_label', '_ofwn_requester', '_ofwn_worker', '_ofwn_status', '_ofwn_work_date'];
+            
+            foreach ($orphan_meta_keys as $meta_key) {
+                $orphan_count = $wpdb->get_var($wpdb->prepare("
+                    SELECT COUNT(*) FROM {$wpdb->postmeta} pm
+                    LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                    WHERE pm.meta_key = %s AND (p.ID IS NULL OR p.post_status = 'trash')
+                ", $meta_key));
+                
+                if ($orphan_count > 0) {
+                    $wpdb->query($wpdb->prepare("
+                        DELETE pm FROM {$wpdb->postmeta} pm
+                        LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                        WHERE pm.meta_key = %s AND (p.ID IS NULL OR p.post_status = 'trash')
+                    ", $meta_key));
+                    
+                    $cleaned_items[] = $meta_key . ': ' . $orphan_count . '件の孤立メタデータ削除';
+                }
+            }
+            
+            // 2. 古い重複作業メモCPTをクリーンアップ（同じ親投稿に対して複数作成されたもの）
+            $duplicate_cpts = $wpdb->get_results("
+                SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
+                FROM {$wpdb->postmeta} pm
+                JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                WHERE pm.meta_key = '_ofwn_bound_post_id'
+                AND p.post_type = 'of_work_note'
+                AND p.post_status = 'publish'
+                GROUP BY pm.meta_value
+                HAVING COUNT(*) > 1
+            ");
+            
+            $duplicate_removed = 0;
+            foreach ($duplicate_cpts as $dup) {
+                // 最新のもの以外を削除
+                $cpt_ids = $wpdb->get_col($wpdb->prepare("
+                    SELECT p.ID FROM {$wpdb->posts} p
+                    JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                    WHERE pm.meta_key = '_ofwn_bound_post_id'
+                    AND pm.meta_value = %s
+                    AND p.post_type = 'of_work_note'
+                    ORDER BY p.post_date DESC
+                    LIMIT 999 OFFSET 1
+                ", $dup->parent_id));
+                
+                foreach ($cpt_ids as $cpt_id) {
+                    wp_delete_post($cpt_id, true); // 完全削除
+                    $duplicate_removed++;
+                }
+            }
+            
+            if ($duplicate_removed > 0) {
+                $cleaned_items[] = '重複作業メモCPT: ' . $duplicate_removed . '件削除';
+            }
+            
+            // 3. 空の作業メモメタデータを削除
+            foreach (['_ofwn_work_title', '_ofwn_work_content'] as $key) {
+                $empty_count = $wpdb->query($wpdb->prepare("
+                    DELETE FROM {$wpdb->postmeta}
+                    WHERE meta_key = %s AND (meta_value = '' OR meta_value IS NULL)
+                ", $key));
+                
+                if ($empty_count > 0) {
+                    $cleaned_items[] = $key . ': ' . $empty_count . '件の空メタデータ削除';
+                }
+            }
+            
+            // 4. 全トランジェントクリア
+            $this->clear_work_notes_transients();
+            $cleaned_items[] = 'work-notes関連トランジェント全削除';
+            
+            // 5. 全キャッシュクリア
+            wp_cache_flush();
+            $cleaned_items[] = 'WordPressキャッシュ全クリア';
+            
+            $message = empty($cleaned_items) ? 
+                'クリーンアップ対象は見つかりませんでした。' : 
+                'クリーンアップ完了: ' . implode('、', $cleaned_items);
+            
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN CLEANUP] ' . $message);
+            }
+            
+            wp_send_json_success(['message' => $message, 'cleaned_items' => $cleaned_items]);
+            
+        } catch (Exception $e) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN CLEANUP] Error: ' . $e->getMessage());
+            }
+            wp_send_json_error(['message' => 'クリーンアップ中にエラーが発生しました: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * メタデータ状況デバッグ（AJAX）
+     */
+    public function ajax_debug_meta_status() {
+        // ノンス検証
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_debug_meta')) {
+            wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
+        }
+        
+        // 権限チェック
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('この操作を実行する権限がありません。', 'work-notes')]);
+        }
+        
+        try {
+            global $wpdb;
+            $debug_info = [];
+            
+            // 1. 作業メモメタデータを持つ投稿の統計
+            $meta_stats = [];
+            $meta_keys = ['_ofwn_work_title', '_ofwn_work_content', '_ofwn_target_label', '_ofwn_requester', '_ofwn_worker', '_ofwn_status', '_ofwn_work_date'];
+            
+            foreach ($meta_keys as $key) {
+                $count = $wpdb->get_var($wpdb->prepare("
+                    SELECT COUNT(DISTINCT pm.post_id) FROM {$wpdb->postmeta} pm
+                    JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                    WHERE pm.meta_key = %s AND pm.meta_value != ''
+                    AND p.post_type IN ('post', 'page') AND p.post_status = 'publish'
+                ", $key));
+                
+                $meta_stats[$key] = $count;
+            }
+            $debug_info['meta_statistics'] = $meta_stats;
+            
+            // 2. 作業メモCPTの統計
+            $cpt_stats = $wpdb->get_row("
+                SELECT 
+                    COUNT(*) as total_cpts,
+                    COUNT(DISTINCT pm.meta_value) as unique_parents
+                FROM {$wpdb->posts} p
+                LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ofwn_bound_post_id'
+                WHERE p.post_type = 'of_work_note' AND p.post_status = 'publish'
+            ");
+            $debug_info['cpt_statistics'] = $cpt_stats;
+            
+            // 3. 重複CPTの確認
+            $duplicates = $wpdb->get_results("
+                SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
+                FROM {$wpdb->postmeta} pm
+                JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                WHERE pm.meta_key = '_ofwn_bound_post_id'
+                AND p.post_type = 'of_work_note'
+                AND p.post_status = 'publish'
+                GROUP BY pm.meta_value
+                HAVING COUNT(*) > 1
+                ORDER BY cpt_count DESC
+                LIMIT 10
+            ");
+            $debug_info['duplicate_cpts'] = $duplicates;
+            
+            // 4. 最近の作業メモ更新状況
+            $recent_updates = $wpdb->get_results("
+                SELECT 
+                    p.ID,
+                    p.post_title,
+                    p.post_modified,
+                    pm1.meta_value as work_title,
+                    pm2.meta_value as work_content
+                FROM {$wpdb->posts} p
+                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = '_ofwn_work_title'
+                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = '_ofwn_work_content'
+                WHERE p.post_type IN ('post', 'page')
+                AND p.post_status = 'publish'
+                AND (pm1.meta_value != '' OR pm2.meta_value != '')
+                ORDER BY p.post_modified DESC
+                LIMIT 10
+            ");
+            $debug_info['recent_updates'] = $recent_updates;
+            
+            wp_send_json_success($debug_info);
+            
+        } catch (Exception $e) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN DEBUG] Error: ' . $e->getMessage());
+            }
+            wp_send_json_error(['message' => 'デバッグ情報取得中にエラーが発生しました: ' . $e->getMessage()]);
         }
     }
 }
