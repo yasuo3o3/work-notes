@@ -104,23 +104,33 @@ class OFWN_List_Table extends WP_List_Table {
         $allowed_statuses = ['依頼', '対応中', '完了'];
         $default_status = '依頼';
         
-        // 全件数
-        $all_count = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = %s AND post_status = %s",
-            OF_Work_Notes::CPT,
-            'publish'
-        ));
-        $out['all'] = (int)$all_count;
+        // Plugin Check対策: 軽キャッシュ追加
+        $ckey = 'ofwn_list_all_count_v1';
+        $all_count = wp_cache_get($ckey, 'ofwn');
+        if (false === $all_count) {
+            $all_count = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = %s AND post_status = %s",
+                OF_Work_Notes::CPT,
+                'publish'
+            ));
+            wp_cache_set($ckey, $all_count, 'ofwn', 60);
+        }
+        $out['all'] = $all_count;
         
         // ステータス別件数（LEFT JOINでメタデータと結合）
-        $status_counts = $wpdb->get_results($wpdb->prepare(
-            "SELECT COALESCE(pm.meta_value, %s) as status, COUNT(*) as count 
-             FROM {$wpdb->posts} p 
-             LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
-             WHERE p.post_type = %s AND p.post_status = %s
-             GROUP BY COALESCE(pm.meta_value, %s)",
-            $default_status, '_ofwn_status', OF_Work_Notes::CPT, 'publish', $default_status
-        ));
+        $ckey2 = 'ofwn_list_status_counts_v1';
+        $status_counts = wp_cache_get($ckey2, 'ofwn');
+        if (false === $status_counts) {
+            $status_counts = (array) $wpdb->get_results($wpdb->prepare(
+                "SELECT COALESCE(pm.meta_value, %s) as status, COUNT(*) as count 
+                 FROM {$wpdb->posts} p 
+                 LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
+                 WHERE p.post_type = %s AND p.post_status = %s
+                 GROUP BY COALESCE(pm.meta_value, %s)",
+                $default_status, '_ofwn_status', OF_Work_Notes::CPT, 'publish', $default_status
+            ));
+            wp_cache_set($ckey2, $status_counts, 'ofwn', 60);
+        }
         
         // 結果を許可リストでフィルターして設定
         foreach ($status_counts as $row) {

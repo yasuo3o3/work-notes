@@ -600,17 +600,17 @@ class OFWN_Worklog_Settings {
             }
             
             // 2. 古い重複作業メモCPTをクリーンアップ（同じ親投稿に対して複数作成されたもの）
-            // 静的SQL - 動的要素なしのため prepare() 不要
-            $duplicate_cpts = $wpdb->get_results("
+            // Plugin Check対策: prepare追加
+            $duplicate_cpts = (array) $wpdb->get_results($wpdb->prepare("
                 SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
                 FROM {$wpdb->postmeta} pm
                 JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                WHERE pm.meta_key = '_ofwn_bound_post_id'
-                AND p.post_type = 'of_work_note'
-                AND p.post_status = 'publish'
+                WHERE pm.meta_key = %s
+                AND p.post_type = %s
+                AND p.post_status = %s
                 GROUP BY pm.meta_value
                 HAVING COUNT(*) > 1
-            ");
+            ", '_ofwn_bound_post_id', 'of_work_note', 'publish'));
             
             $duplicate_removed = 0;
             foreach ($duplicate_cpts as $dup) {
@@ -709,33 +709,36 @@ class OFWN_Worklog_Settings {
             $debug_info['meta_statistics'] = $meta_stats;
             
             // 2. 作業メモCPTの統計
-            $cpt_stats = $wpdb->get_row("
+            // Plugin Check対策: prepare追加
+            $cpt_stats = $wpdb->get_row($wpdb->prepare("
                 SELECT 
                     COUNT(*) as total_cpts,
                     COUNT(DISTINCT pm.meta_value) as unique_parents
                 FROM {$wpdb->posts} p
-                LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ofwn_bound_post_id'
-                WHERE p.post_type = 'of_work_note' AND p.post_status = 'publish'
-            ");
+                LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
+                WHERE p.post_type = %s AND p.post_status = %s
+            ", '_ofwn_bound_post_id', 'of_work_note', 'publish'));
             $debug_info['cpt_statistics'] = $cpt_stats;
             
             // 3. 重複CPTの確認
-            $duplicates = $wpdb->get_results("
+            // Plugin Check対策: prepare追加
+            $duplicates = (array) $wpdb->get_results($wpdb->prepare("
                 SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
                 FROM {$wpdb->postmeta} pm
                 JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                WHERE pm.meta_key = '_ofwn_bound_post_id'
-                AND p.post_type = 'of_work_note'
-                AND p.post_status = 'publish'
+                WHERE pm.meta_key = %s
+                AND p.post_type = %s
+                AND p.post_status = %s
                 GROUP BY pm.meta_value
                 HAVING COUNT(*) > 1
                 ORDER BY cpt_count DESC
                 LIMIT 10
-            ");
+            ", '_ofwn_bound_post_id', 'of_work_note', 'publish'));
             $debug_info['duplicate_cpts'] = $duplicates;
             
             // 4. メタデータを持つ投稿の詳細情報
-            $meta_posts = $wpdb->get_results("
+            // Plugin Check対策: prepare追加（固定値のためプレースホルダー使用）
+            $meta_posts = (array) $wpdb->get_results($wpdb->prepare("
                 SELECT 
                     p.ID,
                     p.post_title,
@@ -748,20 +751,21 @@ class OFWN_Worklog_Settings {
                     pm4.meta_value as requester,
                     pm5.meta_value as worker
                 FROM {$wpdb->posts} p
-                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = '_ofwn_work_title'
-                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = '_ofwn_work_content'
-                LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = '_ofwn_target_label'
-                LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = '_ofwn_requester'
-                LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = '_ofwn_worker'
+                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = %s
                 WHERE p.post_type IN ('post', 'page')
                 AND (pm1.meta_value IS NOT NULL OR pm2.meta_value IS NOT NULL OR pm3.meta_value IS NOT NULL OR pm4.meta_value IS NOT NULL OR pm5.meta_value IS NOT NULL)
                 ORDER BY p.post_modified DESC
                 LIMIT 20
-            ");
+            ", '_ofwn_work_title', '_ofwn_work_content', '_ofwn_target_label', '_ofwn_requester', '_ofwn_worker'));
             $debug_info['meta_posts'] = $meta_posts;
             
             // 5. CPT作成が失敗した可能性のある投稿を特定
-            $should_have_cpts = $wpdb->get_results("
+            // Plugin Check対策: prepare追加
+            $should_have_cpts = (array) $wpdb->get_results($wpdb->prepare("
                 SELECT 
                     p.ID,
                     p.post_title,
@@ -769,17 +773,17 @@ class OFWN_Worklog_Settings {
                     pm2.meta_value as work_content,
                     COUNT(cpt.ID) as existing_cpt_count
                 FROM {$wpdb->posts} p
-                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = '_ofwn_work_title'
-                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = '_ofwn_work_content'
-                LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = '_ofwn_bound_post_id'
-                LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = 'of_work_note' AND cpt.post_status = 'publish'
+                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = %s
+                LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = %s AND cpt.post_status = %s
                 WHERE p.post_type IN ('post', 'page') 
-                AND p.post_status = 'publish'
+                AND p.post_status = %s
                 AND (pm1.meta_value != '' OR pm2.meta_value != '')
                 GROUP BY p.ID
                 HAVING existing_cpt_count = 0
                 ORDER BY p.post_modified DESC
-            ");
+            ", '_ofwn_work_title', '_ofwn_work_content', '_ofwn_bound_post_id', 'of_work_note', 'publish', 'publish'));
             $debug_info['missing_cpts'] = $should_have_cpts;
             
             wp_send_json_success($debug_info);
@@ -812,7 +816,8 @@ class OFWN_Worklog_Settings {
             $created_cpts = [];
             
             // CPTが作成されていない投稿を取得
-            $missing_posts = $wpdb->get_results("
+            // Plugin Check対策: prepare追加
+            $missing_posts = (array) $wpdb->get_results($wpdb->prepare("
                 SELECT 
                     p.ID,
                     p.post_title,
@@ -822,19 +827,19 @@ class OFWN_Worklog_Settings {
                     pm4.meta_value as worker,
                     pm5.meta_value as target_label
                 FROM {$wpdb->posts} p
-                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = '_ofwn_work_title'
-                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = '_ofwn_work_content'
-                LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = '_ofwn_requester'
-                LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = '_ofwn_worker'
-                LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = '_ofwn_target_label'
-                LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = '_ofwn_bound_post_id'
-                LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = 'of_work_note' AND cpt.post_status = 'publish'
+                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = %s
+                LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = %s
+                LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = %s AND cpt.post_status = %s
                 WHERE p.post_type IN ('post', 'page') 
-                AND p.post_status = 'publish'
+                AND p.post_status = %s
                 AND (pm1.meta_value != '' OR pm2.meta_value != '')
                 AND cpt.ID IS NULL
                 ORDER BY p.post_modified DESC
-            ");
+            ", '_ofwn_work_title', '_ofwn_work_content', '_ofwn_requester', '_ofwn_worker', '_ofwn_target_label', '_ofwn_bound_post_id', 'of_work_note', 'publish', 'publish'));
             
             foreach ($missing_posts as $post) {
                 $work_title = trim($post->work_title ?: '');
