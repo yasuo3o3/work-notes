@@ -42,12 +42,24 @@ class OFWN_List_Table extends WP_List_Table {
     protected function extra_tablenav($which) {
         if ($which !== 'top') return;
 
-        $status   = isset($_GET['status']) ? sanitize_text_field($_GET['status']) : '';
-        $requester= isset($_GET['requester']) ? sanitize_text_field($_GET['requester']) : '';
-        $worker   = isset($_GET['worker']) ? sanitize_text_field($_GET['worker']) : '';
-        $tt       = isset($_GET['target_type']) ? sanitize_text_field($_GET['target_type']) : '';
-        $from     = isset($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : '';
-        $to       = isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
+        $status = isset($_GET['status']) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '';
+        $allowed_status = ['', '依頼', '対応中', '完了'];
+        if ( ! in_array( $status, $allowed_status, true ) ) { $status = ''; }
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
+        $requester = isset($_GET['requester']) ? sanitize_text_field( wp_unslash( $_GET['requester'] ) ) : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
+        $worker = isset($_GET['worker']) ? sanitize_text_field( wp_unslash( $_GET['worker'] ) ) : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
+        $tt = isset($_GET['target_type']) ? sanitize_key( wp_unslash( $_GET['target_type'] ) ) : '';
+        $allowed_target_type = ['', 'post', 'site', 'other'];
+        if ( ! in_array( $tt, $allowed_target_type, true ) ) { $tt = ''; }
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
+        $date_from_raw = isset($_GET['date_from']) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '';
+        $from = ( preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from_raw) && strtotime($date_from_raw) ) ? $date_from_raw : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
+        $date_to_raw = isset($_GET['date_to']) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '';
+        $to = ( preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to_raw) && strtotime($date_to_raw) ) ? $date_to_raw : '';
 
         echo '<div class="ofwn-filter-row">';
         echo '<label>' . esc_html__('ステータス', 'work-notes') . ' <select name="status"><option value="">' . esc_html__('すべて', 'work-notes') . '</option>';
@@ -90,7 +102,9 @@ class OFWN_List_Table extends WP_List_Table {
         foreach ($statuses as $key => $label) {
             $url = $key === '' ? $base_url : add_query_arg('status', $key, $base_url);
             $count = $counts[$key ?: 'all'] ?? 0;
-            $class = (isset($_GET['status']) ? $_GET['status'] : '') === $key ? 'class="current"' : '';
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
+            $current_status = isset($_GET['status']) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '';
+            $class = $current_status === $key ? 'class="current"' : '';
             $views[$key ?: 'all'] = sprintf('<a href="%s" %s>%s <span class="count">(%d)</span></a>',
                 esc_url($url), $class, esc_html($label), (int)$count
             );
@@ -147,28 +161,49 @@ class OFWN_List_Table extends WP_List_Table {
 
     public function prepare_items() {
         $per_page = 20;
-        $paged = max(1, (int)($_GET['paged'] ?? 1));
-        $orderby = $_GET['orderby'] ?? 'date';
-        $order   = (strtolower($_GET['order'] ?? 'DESC') === 'asc') ? 'ASC' : 'DESC';
-        $search  = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only pagination
+        $paged = isset($_GET['paged']) ? absint( $_GET['paged'] ) : 1;
+        $paged = max(1, $paged);
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only sort
+        $orderby = isset($_GET['orderby']) ? sanitize_key( wp_unslash( $_GET['orderby'] ) ) : 'date';
+        $allowed_orderby = ['date', 'title', 'ofwn_date'];
+        if ( ! in_array( $orderby, $allowed_orderby, true ) ) { $orderby = 'date'; }
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only sort direction
+        $order = isset($_GET['order']) ? strtolower( sanitize_key( wp_unslash( $_GET['order'] ) ) ) : 'desc';
+        if ( ! in_array( $order, ['asc', 'desc'], true ) ) { $order = 'desc'; }
+        $order = strtoupper($order);
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only search term
+        $search = isset($_GET['s']) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
 
         $meta_query = ['relation'=>'AND'];
 
         // Plugin Check対策: meta_query に compare/type を明示
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
         if (!empty($_GET['status'])) {
-            $meta_query[] = ['key'=>'_ofwn_status','value'=>sanitize_text_field($_GET['status']),'compare'=>'=','type'=>'CHAR'];
+            $status_filter = sanitize_key( wp_unslash( $_GET['status'] ) );
+            $meta_query[] = ['key'=>'_ofwn_status','value'=>$status_filter,'compare'=>'=','type'=>'CHAR'];
         }
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
         if (!empty($_GET['requester'])) {
-            $meta_query[] = ['key'=>'_ofwn_requester','value'=>sanitize_text_field($_GET['requester']),'compare'=>'=','type'=>'CHAR'];
+            $requester_filter = sanitize_text_field( wp_unslash( $_GET['requester'] ) );
+            $meta_query[] = ['key'=>'_ofwn_requester','value'=>$requester_filter,'compare'=>'=','type'=>'CHAR'];
         }
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
         if (!empty($_GET['worker'])) {
-            $meta_query[] = ['key'=>'_ofwn_worker','value'=>sanitize_text_field($_GET['worker']),'compare'=>'=','type'=>'CHAR'];
+            $worker_filter = sanitize_text_field( wp_unslash( $_GET['worker'] ) );
+            $meta_query[] = ['key'=>'_ofwn_worker','value'=>$worker_filter,'compare'=>'=','type'=>'CHAR'];
         }
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
         if (!empty($_GET['target_type'])) {
-            $meta_query[] = ['key'=>'_ofwn_target_type','value'=>sanitize_text_field($_GET['target_type']),'compare'=>'=','type'=>'CHAR'];
+            $target_type_filter = sanitize_key( wp_unslash( $_GET['target_type'] ) );
+            $meta_query[] = ['key'=>'_ofwn_target_type','value'=>$target_type_filter,'compare'=>'=','type'=>'CHAR'];
         }
-        $from = !empty($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : '';
-        $to   = !empty($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
+        $date_from_filter_raw = !empty($_GET['date_from']) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '';
+        $from = ( preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from_filter_raw) && strtotime($date_from_filter_raw) ) ? $date_from_filter_raw : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
+        $date_to_filter_raw = !empty($_GET['date_to']) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '';
+        $to = ( preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to_filter_raw) && strtotime($date_to_filter_raw) ) ? $date_to_filter_raw : '';
         if ($from) $meta_query[] = ['key'=>'_ofwn_work_date','value'=>$from,'compare'=>'>=','type'=>'CHAR'];
         if ($to)   $meta_query[] = ['key'=>'_ofwn_work_date','value'=>$to,'compare'=>'<=','type'=>'CHAR'];
 
