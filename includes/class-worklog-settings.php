@@ -421,16 +421,16 @@ class OFWN_Worklog_Settings {
             $message = 'キャッシュクリア完了: ' . implode('、', $cleared_items);
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN CACHE_CLEAR] ' . $message);
+                ofwn_log('CACHE_CLEAR ' . $message);
             }
             
             wp_send_json_success(['message' => $message]);
             
         } catch (Exception $e) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN CACHE_CLEAR] Error: ' . $e->getMessage());
+                ofwn_log('CACHE_CLEAR Error: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => 'キャッシュクリア中にエラーが発生しました: ' . $e->getMessage()]);
+            wp_send_json_error(['message' => sprintf(__('キャッシュクリア中にエラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
         }
     }
     
@@ -599,6 +599,7 @@ class OFWN_Worklog_Settings {
             }
             
             // 2. 古い重複作業メモCPTをクリーンアップ（同じ親投稿に対して複数作成されたもの）
+            // 静的SQL - 動的要素なしのため prepare() 不要
             $duplicate_cpts = $wpdb->get_results("
                 SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
                 FROM {$wpdb->postmeta} pm
@@ -658,16 +659,16 @@ class OFWN_Worklog_Settings {
                 'クリーンアップ完了: ' . implode('、', $cleaned_items);
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN CLEANUP] ' . $message);
+                ofwn_log('CLEANUP ' . $message);
             }
             
             wp_send_json_success(['message' => $message, 'cleaned_items' => $cleaned_items]);
             
         } catch (Exception $e) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN CLEANUP] Error: ' . $e->getMessage());
+                ofwn_log('CLEANUP Error: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => 'クリーンアップ中にエラーが発生しました: ' . $e->getMessage()]);
+            wp_send_json_error(['message' => sprintf(__('クリーンアップ中にエラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
         }
     }
     
@@ -783,9 +784,9 @@ class OFWN_Worklog_Settings {
             
         } catch (Exception $e) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN DEBUG] Error: ' . $e->getMessage());
+                ofwn_log('DEBUG Error: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => 'デバッグ情報取得中にエラーが発生しました: ' . $e->getMessage()]);
+            wp_send_json_error(['message' => sprintf(__('デバッグ情報取得中にエラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
         }
     }
     
@@ -878,16 +879,16 @@ class OFWN_Worklog_Settings {
                 count($created_cpts) . '件のCPTを作成しました。';
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN FIX_CPT] ' . $message);
+                ofwn_log('FIX_CPT ' . $message);
             }
             
             wp_send_json_success(['message' => $message, 'created_cpts' => $created_cpts]);
             
         } catch (Exception $e) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN FIX_CPT] Error: ' . $e->getMessage());
+                ofwn_log('FIX_CPT Error: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => 'CPT作成中にエラーが発生しました: ' . $e->getMessage()]);
+            wp_send_json_error(['message' => sprintf(__('CPT作成中にエラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
         }
     }
 }

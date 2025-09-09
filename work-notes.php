@@ -16,6 +16,15 @@ define('OFWN_VER', '1.0.2');
 define('OFWN_DIR', plugin_dir_path(__FILE__));
 define('OFWN_URL', plugin_dir_url(__FILE__));
 
+/**
+ * デバッグログ出力ヘルパー関数
+ */
+function ofwn_log($message) {
+    if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+        error_log('[OFWN] ' . $message);
+    }
+}
+
 // 管理画面でのみ WP_List_Table を必要時に読み込み
 if (is_admin() && !class_exists('WP_List_Table')) {
     require_once ABSPATH . 'wp-admin/includes/class-wp-list-table.php';

@@ -396,17 +396,17 @@ class OF_Work_Notes {
         // デバッグログ開始（本番では無効化）
         $debug_log = defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG;
         if ($debug_log) {
-            error_log('[OFWN] save_note_meta called for post_id: ' . $post_id);
+            ofwn_log('save_note_meta called for post_id: ' . $post_id);
         }
         
         // ノンス検証（最優先）
         if (!isset($_POST[self::NONCE])) {
-            if ($debug_log) error_log('[OFWN] Nonce field missing');
+            if ($debug_log) ofwn_log('Nonce field missing');
             return;
         }
         
         if (!wp_verify_nonce($_POST[self::NONCE], self::NONCE)) {
-            if ($debug_log) error_log('[OFWN] Nonce verification failed');
+            if ($debug_log) ofwn_log('Nonce verification failed');
             return;
         }
         
@@ -418,7 +418,7 @@ class OF_Work_Notes {
         
         // 権限チェック
         if (!current_user_can('edit_post', $post_id)) {
-            if ($debug_log) error_log('[OFWN] User cannot edit post');
+            if ($debug_log) ofwn_log('User cannot edit post');
             return;
         }
         
@@ -451,7 +451,7 @@ class OF_Work_Notes {
         // 作業タイトル・作業内容は標準フィールド使用のため自動コピー処理は不要
         // 保存前のログ
         if ($debug_log) {
-            error_log('[OFWN] Saving meta: requester=' . $requester . ', worker=' . $worker);
+            ofwn_log('Saving meta: requester=' . $requester . ', worker=' . $worker);
         }
         
         foreach ($map as $meta => $fieldOrValue) {
@@ -1471,11 +1471,11 @@ class OF_Work_Notes {
      */
     public function ajax_get_sidebar_data() {
         if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_sidebar_nonce')) {
-            wp_send_json_error(['message' => 'Invalid nonce']);
+            wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
         if (!current_user_can('edit_posts')) {
-            wp_send_json_error(['message' => 'Insufficient permissions']);
+            wp_send_json_error(['message' => __('この操作を実行する権限がありません。', 'work-notes')]);
         }
         
         $data = [
@@ -2247,7 +2247,7 @@ class OF_Work_Notes {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 error_log('[OFWN AJAX] Nonce verification failed: received="' . $nonce . '"');
             }
-            wp_send_json_error(['message' => 'セキュリティチェックに失敗しました。']);
+            wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
         // パラメータ取得
@@ -2260,12 +2260,12 @@ class OF_Work_Notes {
         $work_date = sanitize_text_field($_POST['work_date'] ?? '');
         
         if (!$post_id || (!$work_title && !$work_content)) {
-            wp_send_json_error(['message' => '必要なパラメータが不足しています。']);
+            wp_send_json_error(['message' => __('必要なパラメータが不足しています。', 'work-notes')]);
         }
         
         // 権限チェック
         if (!current_user_can('edit_post', $post_id)) {
-            wp_send_json_error(['message' => 'この投稿を編集する権限がありません。']);
+            wp_send_json_error(['message' => __('この投稿を編集する権限がありません。', 'work-notes')]);
         }
         
         try {
@@ -2292,7 +2292,7 @@ class OF_Work_Notes {
                 
                 if ($latest_title === $work_title && $latest_content === $work_content) {
                     wp_send_json_success([
-                        'message' => '同じ内容の作業メモが既に存在します。',
+                        'message' => __('同じ内容の作業メモが既に存在します。', 'work-notes'),
                         'note_id' => $latest_note->ID,
                         'duplicate' => true
                     ]);
@@ -2315,7 +2315,7 @@ class OF_Work_Notes {
             ], true);
             
             if (is_wp_error($note_id)) {
-                wp_send_json_error(['message' => 'CPT作成に失敗: ' . $note_id->get_error_message()]);
+                wp_send_json_error(['message' => sprintf(__('CPT作成に失敗: %s', 'work-notes'), $note_id->get_error_message())]);
             }
             
             // CPTメタデータを設定
@@ -2341,7 +2341,7 @@ class OF_Work_Notes {
             }
             
             wp_send_json_success([
-                'message' => '作業メモを作成しました。',
+                'message' => __('作業メモを作成しました。', 'work-notes'),
                 'note_id' => $note_id,
                 'note_title' => $note_title,
                 'note_content' => $note_content
@@ -2351,7 +2351,7 @@ class OF_Work_Notes {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 error_log('[OFWN AJAX_CREATE] ERROR: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => 'エラーが発生しました: ' . $e->getMessage()]);
+            wp_send_json_error(['message' => sprintf(__('エラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
         }
     }
     

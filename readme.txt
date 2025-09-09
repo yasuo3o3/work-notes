@@ -2,7 +2,7 @@
 Contributors: netservice
 Tags: notes, workflow, task-management, admin, snackbar, gutenberg
 Requires at least: 6.0
-Tested up to: 6.4
+Tested up to: 6.8
 Stable tag: 1.0.2
 Requires PHP: 8.0
 License: GPL-2.0-or-later
