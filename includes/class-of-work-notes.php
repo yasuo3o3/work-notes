@@ -1677,7 +1677,6 @@ class OF_Work_Notes {
                     __('配布エンドポイントは正常に動作しています。<br>URL: %1$s<br>Content-Type: %2$s', 'work-notes'),
                     esc_url($test_url),
                     esc_html($content_type)))
-                )
             ]);
         } elseif (404 === $status_code) {
             /* translators: 1: primary file path, 2: alternative file path. Note: <br> tags are intentional. */
@@ -1686,7 +1685,6 @@ class OF_Work_Notes {
                     __('テストファイルが見つかりません (404)。<br>%1$s または %2$s にファイルを配置してください。', 'work-notes'),
                     esc_html(wp_upload_dir()['basedir'] . '/work-notes-updates/stable.json'),
                     esc_html(OFWN_DIR . 'updates/stable.json')))
-                )
             ]);
         } else {
             /* translators: 1: HTTP status code, 2: response URL */
