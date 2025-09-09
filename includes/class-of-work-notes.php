@@ -1647,7 +1647,7 @@ class OF_Work_Notes {
         
         $content = $wp_filesystem->get_contents($file_path);
         if (false === $content) {
-            wp_die(__('ファイルの読み込みに失敗しました。', 'work-notes'), __('エラー', 'work-notes'), ['response' => 500]);
+            wp_die(esc_html__('ファイルの読み込みに失敗しました。', 'work-notes'), esc_html__('エラー', 'work-notes'), ['response' => 500]);
         }
         
         echo $content;
