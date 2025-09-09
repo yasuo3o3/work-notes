@@ -1650,7 +1650,18 @@ class OF_Work_Notes {
             wp_die(esc_html__('ファイルの読み込みに失敗しました。', 'work-notes'), esc_html__('エラー', 'work-notes'), ['response' => 500]);
         }
         
+        // キャッシュ無効化とバッファクリア
+        nocache_headers();
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Content-Disposition の設定
+        header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
+        
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- バイナリ配信のため生出力が正しい
         echo $content;
+        exit;
     }
     
     /**
