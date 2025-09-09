@@ -1226,7 +1226,7 @@ class OF_Work_Notes {
     private function generate_work_note_content($meta_payload, $post) {
         $content_parts = [];
         
-        /* translators: %s: post title */
+        /* translators: %1$s: post title */
         $content_parts[] = sprintf(__('投稿「%1$s」の作業メモを右サイドバーから作成しました。', 'work-notes'), esc_html(get_the_title($post)));
         
         if (!empty($meta_payload['requester'])) {
@@ -1669,6 +1669,7 @@ class OF_Work_Notes {
             /* translators: 1: test file URL, 2: error message */
             wp_send_json_error([
                 'message' => sprintf(
+                    /* translators: 1: test URL, 2: error message */
                     __('テストURL %1$s へのアクセスに失敗: %2$s', 'work-notes'),
                     esc_url($test_url),
                     esc_html($response->get_error_message())
@@ -2370,7 +2371,7 @@ class OF_Work_Notes {
             ], true);
             
             if (is_wp_error($note_id)) {
-                /* translators: %s: error message from WordPress */
+                /* translators: %1$s: error message from WordPress */
                 wp_send_json_error(['message' => sprintf(__('CPT作成に失敗: %1$s', 'work-notes'), esc_html($note_id->get_error_message()))]);
             }
             
@@ -2407,7 +2408,7 @@ class OF_Work_Notes {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 ofwn_log('AJAX_CREATE] ERROR: ' . $e->getMessage());
             }
-            /* translators: %s: PHP exception message */
+            /* translators: %1$s: PHP exception message */
             wp_send_json_error(['message' => sprintf(__('エラーが発生しました: %1$s', 'work-notes'), esc_html($e->getMessage()))]);
         }
     }
