@@ -15,7 +15,7 @@
     const { createElement: e, Fragment } = wp.element;
     const { PluginPostStatusInfo } = wp.editPost;
     const { useSelect, useDispatch } = wp.data;
-    const { TextControl, SelectControl, BaseControl, Button } = wp.components;
+    const { TextControl, TextareaControl, SelectControl, BaseControl, Button } = wp.components;
     const { useEntityProp } = wp.coreData;
     const { registerPlugin } = wp.plugins;
     const { __ } = wp.i18n;
@@ -64,14 +64,21 @@
         const currentWorker = workNote?.meta?._ofwn_worker || meta?._ofwn_worker || '';
         const currentStatus = workNote?.meta?._ofwn_status || meta?._ofwn_status || '依頼';
         const currentWorkDate = workNote?.meta?._ofwn_work_date || meta?._ofwn_work_date || new Date().toISOString().split('T')[0];
-        // CPT優先：post_title/post_content → メタ → 旧データ
-        const currentWorkTitle = workNote?.title?.rendered || workNote?.meta?._ofwn_work_title || meta?._ofwn_work_title || meta?._ofwn_target_label || '';
-        const currentWorkContent = workNote?.content?.rendered || workNote?.meta?._ofwn_work_content || meta?._ofwn_work_content || '';
+        // 編集用：親メタ優先（CPTは参照のみ）
+        const currentWorkTitle = meta?._ofwn_work_title || meta?._ofwn_target_label || '';
+        const currentWorkContent = meta?._ofwn_work_content || '';
         
-        // Phase 2: 混合モード - 親メタ更新+サーバー側CPT同期
+        // Pタグなどを除去するヘルパー関数
+        const stripHtmlTags = (html) => {
+            if (!html) return '';
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            return tempDiv.textContent || tempDiv.innerText || '';
+        };
+        
+        // Phase 3: JavaScript主導の作業メモ作成（遅延問題対策）
         const createOrUpdateWorkNote = function(updates) {
             // 親投稿のメタフィールドを更新（従来通り）
-            // サーバーサイドのsave_postフックでCPT同期が実行される
             const newMeta = { ...meta };
             Object.keys(updates).forEach(key => {
                 newMeta[key] = updates[key];
@@ -80,6 +87,56 @@
             
             // デバッグログ
             console.log('Work Notes: メタフィールド更新', updates);
+        };
+        
+        // 投稿保存後のAJAX作業メモ作成
+        const createWorkNoteViaAjax = function(workTitle, workContent) {
+            // 投稿保存完了を少し待ってから実行（データベースコミット待ち）
+            setTimeout(() => {
+                const ajaxData = {
+                    action: 'ofwn_create_work_note',
+                    nonce: window.ofwnAjax?.nonce || '',
+                    post_id: postId,
+                    work_title: workTitle || '',
+                    work_content: workContent || '',
+                    requester: currentRequester,
+                    worker: currentWorker,
+                    status: currentStatus,
+                    work_date: currentWorkDate
+                };
+                
+                console.log('Work Notes: AJAX作業メモ作成開始', ajaxData);
+                
+                // jQuery AJAXを使用（より確実な方法）
+                jQuery.post(window.ajaxurl || '/wp-admin/admin-ajax.php', ajaxData)
+                    .done(function(response) {
+                        console.log('Work Notes: AJAX作業メモ作成成功', response);
+                        if (response.success && !response.data.duplicate) {
+                            // 成功通知
+                            wp.data.dispatch('core/notices').createNotice(
+                                'success',
+                                '作業メモを作成しました: ' + response.data.note_title,
+                                { type: 'snackbar', isDismissible: true }
+                            );
+                        } else if (response.data && response.data.duplicate) {
+                            console.log('Work Notes: 重複のため作成をスキップ');
+                        } else {
+                            console.warn('Work Notes: 作業メモ作成に失敗', response.data?.message || '不明なエラー');
+                        }
+                    })
+                    .fail(function(xhr, status, error) {
+                        console.error('Work Notes: AJAX作業メモ作成エラー', {
+                            status: status,
+                            error: error,
+                            responseText: xhr.responseText
+                        });
+                        wp.data.dispatch('core/notices').createNotice(
+                            'error',
+                            '作業メモの作成に失敗しました: ' + error,
+                            { type: 'snackbar', isDismissible: true }
+                        );
+                    });
+            }, 500); // 0.5秒後に実行
         };
         
         // 旧式メタ更新（Phase 1互換性用）
@@ -146,6 +203,28 @@
             }
             
         }, [meta, prefillApplied, backfillProcessed]);
+        
+        // 投稿保存の監視とAJAX作業メモ作成
+        const isSaving = useSelect(select => 
+            select('core/editor').isSavingPost(), []
+        );
+        const wasSaving = wp.element.useRef(false);
+        
+        // AJAX作業メモ作成は一時的に無効化（save_postフックを優先）
+        // useEffect(() => {
+        //     // 保存完了時（isSaving: true → false）にAJAX実行
+        //     if (wasSaving.current && !isSaving) {
+        //         const workTitle = meta?._ofwn_work_title || '';
+        //         const workContent = meta?._ofwn_work_content || '';
+        //         
+        //         // 作業タイトルまたは作業内容がある場合のみ実行
+        //         if (workTitle || workContent) {
+        //             console.log('Work Notes: 投稿保存完了 - AJAX作業メモ作成を開始');
+        //             createWorkNoteViaAjax(workTitle, workContent);
+        //         }
+        //     }
+        //     wasSaving.current = isSaving;
+        // }, [isSaving, meta?._ofwn_work_title, meta?._ofwn_work_content]);
         
         // 依頼元・担当者のオプション（サーバーから取得）
         const requesterOptions = window.ofwnGutenbergData?.requesters || [];
@@ -297,12 +376,12 @@
                         }
                     }),
                     
-                    // 新規追加: 作業内容
-                    e(TextControl, {
+                    // 新規追加: 作業内容（複数行テキストエリア）
+                    e(TextareaControl, {
                         label: __('作業内容', 'work-notes'),
                         className: 'work-notes-field',
                         rows: 3,
-                        value: currentWorkContent,
+                        value: stripHtmlTags(currentWorkContent),
                         onChange: function(value) {
                             createOrUpdateWorkNote({ _ofwn_work_content: value });
                         }
