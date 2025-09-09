@@ -16,6 +16,7 @@ class OFWN_Worklog_Settings {
         add_action('wp_ajax_ofwn_clear_cache', [$this, 'ajax_clear_cache']);
         add_action('wp_ajax_ofwn_cleanup_old_meta', [$this, 'ajax_cleanup_old_meta']);
         add_action('wp_ajax_ofwn_debug_meta_status', [$this, 'ajax_debug_meta_status']);
+        add_action('wp_ajax_ofwn_fix_missing_cpts', [$this, 'ajax_fix_missing_cpts']);
         
         // マイグレーション処理（通知機能削除）
         add_action('plugins_loaded', [$this, 'run_migration'], 1);
@@ -176,6 +177,9 @@ class OFWN_Worklog_Settings {
                 <button type="button" id="ofwn-debug-meta-btn" class="button">
                     <?php esc_html_e('データ状況を確認', 'work-notes'); ?>
                 </button>
+                <button type="button" id="ofwn-fix-missing-cpts-btn" class="button button-primary">
+                    <?php esc_html_e('不足しているCPTを作成', 'work-notes'); ?>
+                </button>
                 <button type="button" id="ofwn-cleanup-meta-btn" class="button button-secondary">
                     <?php esc_html_e('古いデータをクリーンアップ', 'work-notes'); ?>
                 </button>
@@ -265,6 +269,29 @@ class OFWN_Worklog_Settings {
                                 html += '</ul>';
                             }
                             
+                            if (data.meta_posts && data.meta_posts.length > 0) {
+                                html += '<h5>メタデータを持つ投稿:</h5><ul>';
+                                $.each(data.meta_posts, function(i, post) {
+                                    html += '<li>ID:' + post.ID + ' "' + (post.post_title || 'タイトルなし') + '" (' + post.post_type + ', ' + post.post_status + ')';
+                                    if (post.work_title) html += ' - タイトル: "' + post.work_title + '"';
+                                    if (post.work_content) html += ' - 内容: "' + post.work_content.substring(0, 50) + '..."';
+                                    html += '</li>';
+                                });
+                                html += '</ul>';
+                            }
+                            
+                            if (data.missing_cpts && data.missing_cpts.length > 0) {
+                                html += '<h5 style="color:red;">CPTが作成されていない投稿:</h5><ul>';
+                                $.each(data.missing_cpts, function(i, post) {
+                                    html += '<li style="color:red;">ID:' + post.ID + ' "' + (post.post_title || 'タイトルなし') + '"';
+                                    if (post.work_title) html += ' - タイトル: "' + post.work_title + '"';
+                                    if (post.work_content) html += ' - 内容: "' + post.work_content.substring(0, 50) + '..."';
+                                    html += '</li>';
+                                });
+                                html += '</ul>';
+                                html += '<p style="color:red;"><strong>警告:</strong> これらの投稿は作業メモメタデータを持っているのにCPTが作成されていません。</p>';
+                            }
+                            
                             html += '</div>';
                             $result.html(html);
                         } else {
@@ -274,6 +301,43 @@ class OFWN_Worklog_Settings {
                         $result.html('<div class="notice notice-error inline"><p><?php esc_html_e('データ確認に失敗しました。', 'work-notes'); ?></p></div>');
                     }).always(function() {
                         $btn.prop('disabled', false).text('<?php esc_html_e('データ状況を確認', 'work-notes'); ?>');
+                    });
+                });
+                
+                // 不足CPT作成機能
+                $('#ofwn-fix-missing-cpts-btn').on('click', function() {
+                    if (!confirm('不足している作業メモCPTを作成しますか？')) {
+                        return;
+                    }
+                    
+                    var $btn = $(this);
+                    var $result = $('#ofwn-cleanup-result');
+                    
+                    $btn.prop('disabled', true).text('<?php esc_html_e('CPT作成中...', 'work-notes'); ?>');
+                    $result.html('');
+                    
+                    $.post(ajaxurl, {
+                        action: 'ofwn_fix_missing_cpts',
+                        nonce: '<?php echo wp_create_nonce('ofwn_fix_missing_cpts'); ?>'
+                    }, function(response) {
+                        if (response.success) {
+                            var html = '<div class="notice notice-success inline"><p>' + response.data.message + '</p>';
+                            if (response.data.created_cpts && response.data.created_cpts.length > 0) {
+                                html += '<ul>';
+                                $.each(response.data.created_cpts, function(i, item) {
+                                    html += '<li>' + item + '</li>';
+                                });
+                                html += '</ul>';
+                            }
+                            html += '</div>';
+                            $result.html(html);
+                        } else {
+                            $result.html('<div class="notice notice-error inline"><p>' + response.data.message + '</p></div>');
+                        }
+                    }).fail(function() {
+                        $result.html('<div class="notice notice-error inline"><p><?php esc_html_e('CPT作成に失敗しました。', 'work-notes'); ?></p></div>');
+                    }).always(function() {
+                        $btn.prop('disabled', false).text('<?php esc_html_e('不足しているCPTを作成', 'work-notes'); ?>');
                     });
                 });
                 
@@ -667,24 +731,53 @@ class OFWN_Worklog_Settings {
             ");
             $debug_info['duplicate_cpts'] = $duplicates;
             
-            // 4. 最近の作業メモ更新状況
-            $recent_updates = $wpdb->get_results("
+            // 4. メタデータを持つ投稿の詳細情報
+            $meta_posts = $wpdb->get_results("
                 SELECT 
                     p.ID,
                     p.post_title,
+                    p.post_type,
+                    p.post_status,
                     p.post_modified,
                     pm1.meta_value as work_title,
-                    pm2.meta_value as work_content
+                    pm2.meta_value as work_content,
+                    pm3.meta_value as target_label,
+                    pm4.meta_value as requester,
+                    pm5.meta_value as worker
                 FROM {$wpdb->posts} p
                 LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = '_ofwn_work_title'
                 LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = '_ofwn_work_content'
+                LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = '_ofwn_target_label'
+                LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = '_ofwn_requester'
+                LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = '_ofwn_worker'
                 WHERE p.post_type IN ('post', 'page')
+                AND (pm1.meta_value IS NOT NULL OR pm2.meta_value IS NOT NULL OR pm3.meta_value IS NOT NULL OR pm4.meta_value IS NOT NULL OR pm5.meta_value IS NOT NULL)
+                ORDER BY p.post_modified DESC
+                LIMIT 20
+            ");
+            $debug_info['meta_posts'] = $meta_posts;
+            
+            // 5. CPT作成が失敗した可能性のある投稿を特定
+            $should_have_cpts = $wpdb->get_results("
+                SELECT 
+                    p.ID,
+                    p.post_title,
+                    pm1.meta_value as work_title,
+                    pm2.meta_value as work_content,
+                    COUNT(cpt.ID) as existing_cpt_count
+                FROM {$wpdb->posts} p
+                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = '_ofwn_work_title'
+                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = '_ofwn_work_content'
+                LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = '_ofwn_bound_post_id'
+                LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = 'of_work_note' AND cpt.post_status = 'publish'
+                WHERE p.post_type IN ('post', 'page') 
                 AND p.post_status = 'publish'
                 AND (pm1.meta_value != '' OR pm2.meta_value != '')
+                GROUP BY p.ID
+                HAVING existing_cpt_count = 0
                 ORDER BY p.post_modified DESC
-                LIMIT 10
             ");
-            $debug_info['recent_updates'] = $recent_updates;
+            $debug_info['missing_cpts'] = $should_have_cpts;
             
             wp_send_json_success($debug_info);
             
@@ -693,6 +786,108 @@ class OFWN_Worklog_Settings {
                 error_log('[OFWN DEBUG] Error: ' . $e->getMessage());
             }
             wp_send_json_error(['message' => 'デバッグ情報取得中にエラーが発生しました: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * 不足しているCPTを作成（AJAX）
+     */
+    public function ajax_fix_missing_cpts() {
+        // ノンス検証
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_fix_missing_cpts')) {
+            wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
+        }
+        
+        // 権限チェック
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('この操作を実行する権限がありません。', 'work-notes')]);
+        }
+        
+        try {
+            global $wpdb;
+            $created_cpts = [];
+            
+            // CPTが作成されていない投稿を取得
+            $missing_posts = $wpdb->get_results("
+                SELECT 
+                    p.ID,
+                    p.post_title,
+                    pm1.meta_value as work_title,
+                    pm2.meta_value as work_content,
+                    pm3.meta_value as requester,
+                    pm4.meta_value as worker,
+                    pm5.meta_value as target_label
+                FROM {$wpdb->posts} p
+                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = '_ofwn_work_title'
+                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = '_ofwn_work_content'
+                LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = '_ofwn_requester'
+                LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = '_ofwn_worker'
+                LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = '_ofwn_target_label'
+                LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = '_ofwn_bound_post_id'
+                LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = 'of_work_note' AND cpt.post_status = 'publish'
+                WHERE p.post_type IN ('post', 'page') 
+                AND p.post_status = 'publish'
+                AND (pm1.meta_value != '' OR pm2.meta_value != '')
+                AND cpt.ID IS NULL
+                ORDER BY p.post_modified DESC
+            ");
+            
+            foreach ($missing_posts as $post) {
+                $work_title = trim($post->work_title ?: '');
+                $work_content = trim($post->work_content ?: '');
+                
+                // 少なくとも一つの内容がある場合のみ作成
+                if (empty($work_title) && empty($work_content)) {
+                    continue;
+                }
+                
+                // CPTを作成
+                $note_title = !empty($work_title) ? sanitize_text_field($work_title) : '作業メモ ' . current_time('Y-m-d H:i');
+                $note_content = !empty($work_content) ? wp_kses_post($work_content) : '';
+                
+                $note_id = wp_insert_post([
+                    'post_type' => 'of_work_note',
+                    'post_status' => 'publish',
+                    'post_title' => $note_title,
+                    'post_content' => $note_content,
+                    'post_author' => get_current_user_id(),
+                ]);
+                
+                if ($note_id && !is_wp_error($note_id)) {
+                    // メタデータを設定
+                    update_post_meta($note_id, '_ofwn_target_type', 'post');
+                    update_post_meta($note_id, '_ofwn_target_id', (string)$post->ID);
+                    update_post_meta($note_id, '_ofwn_bound_post_id', (int)$post->ID);
+                    
+                    if (!empty($post->requester)) {
+                        update_post_meta($note_id, '_ofwn_requester', sanitize_text_field($post->requester));
+                    }
+                    if (!empty($post->worker)) {
+                        update_post_meta($note_id, '_ofwn_worker', sanitize_text_field($post->worker));
+                    }
+                    if (!empty($post->target_label)) {
+                        update_post_meta($note_id, '_ofwn_target_label', sanitize_text_field($post->target_label));
+                    }
+                    
+                    $created_cpts[] = 'CPT #' . $note_id . ' を作成 (親投稿: #' . $post->ID . ' "' . $post->post_title . '")';
+                }
+            }
+            
+            $message = empty($created_cpts) ? 
+                '作成すべきCPTは見つかりませんでした。' : 
+                count($created_cpts) . '件のCPTを作成しました。';
+            
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN FIX_CPT] ' . $message);
+            }
+            
+            wp_send_json_success(['message' => $message, 'created_cpts' => $created_cpts]);
+            
+        } catch (Exception $e) {
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[OFWN FIX_CPT] Error: ' . $e->getMessage());
+            }
+            wp_send_json_error(['message' => 'CPT作成中にエラーが発生しました: ' . $e->getMessage()]);
         }
     }
 }
