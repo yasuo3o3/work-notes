@@ -137,7 +137,7 @@ class OFWN_Worklog_Settings {
                 <?php
                 settings_fields('ofwn_settings');
                 do_settings_sections('ofwn_settings');
-                submit_button(__('マスター設定を保存', 'work-notes'));
+                submit_button(esc_html__('マスター設定を保存', 'work-notes'));
                 ?>
             </form>
             
@@ -197,7 +197,7 @@ class OFWN_Worklog_Settings {
                     
                     $.post(ajaxurl, {
                         action: 'ofwn_check_distribution',
-                        nonce: '<?php echo wp_create_nonce('ofwn_distribution_check'); ?>'
+                        nonce: '<?php echo esc_attr(wp_create_nonce('ofwn_distribution_check')); ?>'
                     }, function(response) {
                         if (response.success) {
                             $result.html('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
@@ -221,7 +221,7 @@ class OFWN_Worklog_Settings {
                     
                     $.post(ajaxurl, {
                         action: 'ofwn_clear_cache',
-                        nonce: '<?php echo wp_create_nonce('ofwn_clear_cache'); ?>'
+                        nonce: '<?php echo esc_attr(wp_create_nonce('ofwn_clear_cache')); ?>'
                     }, function(response) {
                         if (response.success) {
                             $result.html('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
@@ -245,7 +245,7 @@ class OFWN_Worklog_Settings {
                     
                     $.post(ajaxurl, {
                         action: 'ofwn_debug_meta_status',
-                        nonce: '<?php echo wp_create_nonce('ofwn_debug_meta'); ?>'
+                        nonce: '<?php echo esc_attr(wp_create_nonce('ofwn_debug_meta')); ?>'
                     }, function(response) {
                         if (response.success) {
                             var data = response.data;
@@ -318,7 +318,7 @@ class OFWN_Worklog_Settings {
                     
                     $.post(ajaxurl, {
                         action: 'ofwn_fix_missing_cpts',
-                        nonce: '<?php echo wp_create_nonce('ofwn_fix_missing_cpts'); ?>'
+                        nonce: '<?php echo esc_attr(wp_create_nonce('ofwn_fix_missing_cpts')); ?>'
                     }, function(response) {
                         if (response.success) {
                             var html = '<div class="notice notice-success inline"><p>' + response.data.message + '</p>';
@@ -355,7 +355,7 @@ class OFWN_Worklog_Settings {
                     
                     $.post(ajaxurl, {
                         action: 'ofwn_cleanup_old_meta',
-                        nonce: '<?php echo wp_create_nonce('ofwn_cleanup_old_meta'); ?>'
+                        nonce: '<?php echo esc_attr(wp_create_nonce('ofwn_cleanup_old_meta')); ?>'
                     }, function(response) {
                         if (response.success) {
                             var html = '<div class="notice notice-success inline"><p>' + response.data.message + '</p>';
