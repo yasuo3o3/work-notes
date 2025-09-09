@@ -149,6 +149,7 @@ class OF_Work_Notes {
         }
         
         // edit.php?post_type=of_work_note
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if ($hook === 'edit.php' && isset($_GET['post_type']) && sanitize_text_field(wp_unslash($_GET['post_type'])) === self::CPT) {
             $is_work_notes_screen = true;
         }
@@ -186,6 +187,7 @@ class OF_Work_Notes {
      * 旧設定ページへのアクセスを作業ログ設定にリダイレクト
      */
     public function handle_legacy_settings_redirect() {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if (isset($_GET['post_type']) && sanitize_text_field(wp_unslash($_GET['post_type'])) === self::CPT &&
             isset($_GET['page']) && sanitize_text_field(wp_unslash($_GET['page'])) === 'ofwn-settings') {
             wp_redirect(admin_url('edit.php?post_type=' . self::CPT . '&page=ofwn-worklog-settings'));
@@ -1273,6 +1275,7 @@ class OF_Work_Notes {
             'meta' => ['title'=>'作業メモを追加']
         ];
 
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if ($screen && $screen->base === 'post' && isset($_GET['post'])) {
             $pid = (int)$_GET['post'];
             $args['href'] = admin_url('post-new.php?post_type=' . self::CPT . '&ofwn_target=post:' . $pid);
@@ -1281,9 +1284,11 @@ class OF_Work_Notes {
     }
 
     public function maybe_prefill_target_meta($screen) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if ($screen && $screen->id === self::CPT && $screen->base === 'post' && isset($_GET['ofwn_target'])) {
             add_filter('default_title', function($title){ return '作業メモ ' . current_time('Y-m-d H:i'); });
             add_action('save_post_' . self::CPT, function($post_id){
+                // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- save_post内でのGET参照
                 if (!isset($_GET['ofwn_target'])) return;
                 $raw = isset($_GET['ofwn_target']) ? sanitize_text_field(wp_unslash($_GET['ofwn_target'])) : '';
                 if (strpos($raw, 'post:') === 0) {
@@ -1386,6 +1391,7 @@ class OF_Work_Notes {
         
         // 現在の投稿IDを取得
         $current_post_id = 0;
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if (isset($_GET['post'])) {
             $current_post_id = absint(wp_unslash($_GET['post']));
         } elseif (isset($_POST['post_ID'])) {
