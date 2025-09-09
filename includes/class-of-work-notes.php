@@ -189,6 +189,7 @@ class OF_Work_Notes {
     public function handle_legacy_settings_redirect() {
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if (isset($_GET['post_type']) && sanitize_text_field(wp_unslash($_GET['post_type'])) === self::CPT &&
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
             isset($_GET['page']) && sanitize_text_field(wp_unslash($_GET['page'])) === 'ofwn-settings') {
             wp_redirect(admin_url('edit.php?post_type=' . self::CPT . '&page=ofwn-worklog-settings'));
             exit;
@@ -902,6 +903,7 @@ class OF_Work_Notes {
             // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
             if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
             // RESTリクエスト時：$_POST['meta']から直接最新値を取得（最優先）
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
             $meta = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
             $meta = array_map('sanitize_text_field', $meta);
             $target_type = isset($meta['_ofwn_target_type']) ? sanitize_text_field($meta['_ofwn_target_type']) : get_post_meta($post_id, '_ofwn_target_type', true);
@@ -947,6 +949,7 @@ class OF_Work_Notes {
             if ($is_rest_request && isset($_POST['meta'])) {
                 // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
                 if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
                 $meta_compare = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
                 $meta_compare = array_map('sanitize_text_field', $meta_compare);
                 $rest_work_title = isset($meta_compare['_ofwn_work_title']) ? sanitize_text_field($meta_compare['_ofwn_work_title']) : 'not_set';
@@ -1277,6 +1280,7 @@ class OF_Work_Notes {
 
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if ($screen && $screen->base === 'post' && isset($_GET['post'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
             $pid = (int)$_GET['post'];
             $args['href'] = admin_url('post-new.php?post_type=' . self::CPT . '&ofwn_target=post:' . $pid);
         }
@@ -1290,6 +1294,7 @@ class OF_Work_Notes {
             add_action('save_post_' . self::CPT, function($post_id){
                 // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- save_post内でのGET参照
                 if (!isset($_GET['ofwn_target'])) return;
+                // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- save_post内でのGET参照
                 $raw = isset($_GET['ofwn_target']) ? sanitize_text_field(wp_unslash($_GET['ofwn_target'])) : '';
                 if (strpos($raw, 'post:') === 0) {
                     $pid = (int)substr($raw, 5);
@@ -2183,6 +2188,7 @@ class OF_Work_Notes {
             // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
             if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
             // $_POST['meta'] を unslash→sanitize（ネスト浅想定）
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
             $meta = isset($_POST['meta']) ? wp_unslash($_POST['meta']) : [];
             $meta = is_array($meta) ? array_map(
                 static function($v){ return is_array($v) ? array_map('sanitize_text_field',$v) : sanitize_text_field($v); },
