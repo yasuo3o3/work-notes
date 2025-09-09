@@ -48,29 +48,32 @@ do {
 } while (count($posts) === $batch_size);
 
 // 念のため残ったメタデータを削除
+// Plugin uninstall: 安全な直接クエリ。esc_like()でLIKEパターンをエスケープしてprepareで実行
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
-    '_ofwn_%'
+    $wpdb->esc_like('_ofwn_') . '%'
 ));
 
 // 通知機能関連のメタデータも削除
+// Plugin uninstall: 安全な直接クエリ。esc_like()でLIKEパターンをエスケープしてprepareで実行
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
-    'ofwn_worklog_%'
+    $wpdb->esc_like('ofwn_worklog_') . '%'
 ));
 
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->usermeta} WHERE meta_key LIKE %s",
-    'ofwn_worklog_%'
+    $wpdb->esc_like('ofwn_worklog_') . '%'
 ));
 
 // 通知機能関連のトランジェントを削除
+// Plugin uninstall: 安全な直接クエリ。esc_like()でLIKEパターンをエスケープしてprepareで実行
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-    '_transient_ofwn_worklog_%'
+    $wpdb->esc_like('_transient_ofwn_worklog_') . '%'
 ));
 
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-    '_transient_timeout_ofwn_worklog_%'
+    $wpdb->esc_like('_transient_timeout_ofwn_worklog_') . '%'
 ));
