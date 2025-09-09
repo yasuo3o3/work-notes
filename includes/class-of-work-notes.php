@@ -1675,7 +1675,6 @@ class OF_Work_Notes {
             /* translators: 1: test file URL, 2: error message */
             wp_send_json_error([
                 'message' => sprintf(
-                    /* translators: 1: test URL, 2: error message */
                     __('テストURL %1$s へのアクセスに失敗: %2$s', 'work-notes'),
                     esc_url($test_url),
                     esc_html($response->get_error_message())
@@ -1687,25 +1686,25 @@ class OF_Work_Notes {
         $content_type = wp_remote_retrieve_header($response, 'content-type');
         
         if (200 === $status_code) {
-            /* translators: 1: endpoint URL, 2: response Content-Type. Note: <br> tags are intentional. */
             wp_send_json_success([
                 'message' => wp_kses_post(sprintf(
+                    /* translators: 1: endpoint URL, 2: response Content-Type. Note: <br> tags are intentional. */
                     __('配布エンドポイントは正常に動作しています。<br>URL: %1$s<br>Content-Type: %2$s', 'work-notes'),
                     esc_url($test_url),
                     esc_html($content_type)))
             ]);
         } elseif (404 === $status_code) {
-            /* translators: 1: primary file path, 2: alternative file path. Note: <br> tags are intentional. */
             wp_send_json_error([
                 'message' => wp_kses_post(sprintf(
+                    /* translators: 1: primary file path, 2: alternative file path. Note: <br> tags are intentional. */
                     __('テストファイルが見つかりません (404)。<br>%1$s または %2$s にファイルを配置してください。', 'work-notes'),
                     esc_html(wp_upload_dir()['basedir'] . '/work-notes-updates/stable.json'),
                     esc_html(OFWN_DIR . 'updates/stable.json')))
             ]);
         } else {
-            /* translators: 1: HTTP status code, 2: response URL */
             wp_send_json_error([
                 'message' => sprintf(
+                    /* translators: 1: HTTP status code, 2: response URL */
                     __('予期しないレスポンス (HTTP %1$d): %2$s', 'work-notes'),
                     (int) $status_code,
                     esc_url($test_url)
