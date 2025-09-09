@@ -429,7 +429,8 @@ class OF_Work_Notes {
             return;
         }
         
-        if (!wp_verify_nonce(wp_unslash($_POST[self::NONCE] ?? ''), self::NONCE)) {
+        $nonce = isset($_POST[self::NONCE]) ? sanitize_text_field(wp_unslash($_POST[self::NONCE])) : '';
+        if (!wp_verify_nonce($nonce, self::NONCE)) {
             if ($debug_log) ofwn_log('Nonce verification failed');
             return;
         }
@@ -826,7 +827,8 @@ class OF_Work_Notes {
     }
 
     public function capture_quick_note_from_parent($post_id, $post) {
-        if (!isset($_POST[self::NONCE]) || !wp_verify_nonce(wp_unslash($_POST[self::NONCE]), self::NONCE)) {
+        $nonce = isset($_POST[self::NONCE]) ? sanitize_text_field(wp_unslash($_POST[self::NONCE])) : '';
+        if (!isset($_POST[self::NONCE]) || !wp_verify_nonce($nonce, self::NONCE)) {
             return;
         }
         if (!wp_doing_ajax() && (!isset($_POST['action']) || 'editpost' !== $_POST['action'])) {
@@ -894,7 +896,8 @@ class OF_Work_Notes {
         
         if ($is_rest_request && isset($_POST['meta'])) {
             // RESTリクエスト時：$_POST['meta']から直接最新値を取得（最優先）
-            $meta = wp_unslash($_POST['meta']);
+            $meta = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
+            $meta = array_map('sanitize_text_field', $meta);
             $target_type = isset($meta['_ofwn_target_type']) ? sanitize_text_field($meta['_ofwn_target_type']) : get_post_meta($post_id, '_ofwn_target_type', true);
             $target_id = isset($meta['_ofwn_target_id']) ? absint($meta['_ofwn_target_id']) : get_post_meta($post_id, '_ofwn_target_id', true);
             $target_label = isset($meta['_ofwn_target_label']) ? sanitize_text_field($meta['_ofwn_target_label']) : get_post_meta($post_id, '_ofwn_target_label', true);
@@ -936,7 +939,8 @@ class OF_Work_Notes {
             
             // RESTリクエスト時の詳細比較
             if ($is_rest_request && isset($_POST['meta'])) {
-                $meta_compare = wp_unslash($_POST['meta']);
+                $meta_compare = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
+                $meta_compare = array_map('sanitize_text_field', $meta_compare);
                 $rest_work_title = isset($meta_compare['_ofwn_work_title']) ? sanitize_text_field($meta_compare['_ofwn_work_title']) : 'not_set';
                 $rest_work_content = isset($meta_compare['_ofwn_work_content']) ? wp_kses_post($meta_compare['_ofwn_work_content']) : 'not_set';
                 $db_work_title = get_post_meta($post_id, '_ofwn_work_title', true);
@@ -1275,7 +1279,7 @@ class OF_Work_Notes {
             add_filter('default_title', function($title){ return '作業メモ ' . current_time('Y-m-d H:i'); });
             add_action('save_post_' . self::CPT, function($post_id){
                 if (!isset($_GET['ofwn_target'])) return;
-                $raw = sanitize_text_field($_GET['ofwn_target']);
+                $raw = isset($_GET['ofwn_target']) ? sanitize_text_field(wp_unslash($_GET['ofwn_target'])) : '';
                 if (strpos($raw, 'post:') === 0) {
                     $pid = (int)substr($raw, 5);
                     update_post_meta($post_id, '_ofwn_target_type', 'post');
@@ -1504,7 +1508,8 @@ class OF_Work_Notes {
      * サイドバーデータ取得用AJAX
      */
     public function ajax_get_sidebar_data() {
-        if (!wp_verify_nonce(wp_unslash($_POST['nonce'] ?? ''), 'ofwn_sidebar_nonce')) {
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'ofwn_sidebar_nonce')) {
             wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
@@ -1668,7 +1673,8 @@ class OF_Work_Notes {
      * 配布エンドポイント確認AJAX
      */
     public function ajax_check_distribution() {
-        if (!wp_verify_nonce(wp_unslash($_POST['nonce'] ?? ''), 'ofwn_distribution_check')) {
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'ofwn_distribution_check')) {
             wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
@@ -2316,7 +2322,7 @@ class OF_Work_Notes {
         }
         
         // ノンス検証
-        $nonce = wp_unslash($_POST['nonce'] ?? '');
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
         if (!wp_verify_nonce($nonce, 'ofwn_create_work_note')) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 ofwn_log('Nonce verification failed: received="' . $nonce . '"');
