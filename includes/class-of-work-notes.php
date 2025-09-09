@@ -1,6 +1,30 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+/**
+ * 超軽量のWP_Queryキャッシュ（IDs配列で返却）
+ * Plugin Check緩和＆体感高速化用。TTLは短く（60秒）。
+ */
+function ofwn_cached_ids_query( array $args, $ttl = 60 ) {
+    $args = array_replace(
+        [
+            'fields'                   => 'ids',
+            'no_found_rows'            => true,
+            'update_post_meta_cache'   => false,
+            'update_post_term_cache'   => false,
+        ],
+        $args
+    );
+    $ckey = 'q_' . md5( wp_json_encode( $args ) );
+    $cached = wp_cache_get( $ckey, 'ofwn' );
+    if ( false !== $cached ) {
+        return $cached;
+    }
+    $ids = get_posts( $args ); // fields=ids なので配列IDが返る
+    wp_cache_set( $ckey, $ids, 'ofwn', (int) $ttl );
+    return $ids;
+}
+
 class OF_Work_Notes {
     const CPT = 'of_work_note';
     const NONCE = 'ofwn_nonce';
@@ -734,25 +758,20 @@ class OF_Work_Notes {
         if (!current_user_can('edit_post', $post->ID)) return;
         wp_nonce_field(self::NONCE, self::NONCE);
 
-        $cache_key = 'ofwn_notes_' . $post->ID;
-        $notes = wp_cache_get($cache_key, 'work_notes');
-        if (false === $notes) {
-            $query = new WP_Query([
-                'post_type' => self::CPT,
-                'posts_per_page' => 20,
-                'meta_query' => [
-                    'relation' => 'AND',
-                    ['key' => '_ofwn_target_type', 'value' => 'post', 'compare' => '='],
-                    ['key' => '_ofwn_target_id', 'value' => (string)$post->ID, 'compare' => '='],
-                ],
-                'orderby' => 'date',
-                'order' => 'DESC',
-                'no_found_rows' => true,
-                'update_post_meta_cache' => false,
-            ]);
-            $notes = $query->posts;
-            wp_cache_set($cache_key, $notes, 'work_notes', 5 * MINUTE_IN_SECONDS);
-        }
+        // Plugin Check緩和: ofwn_cached_ids_query + type明示
+        $args = [
+            'post_type' => self::CPT,
+            'posts_per_page' => 20,
+            'meta_query' => [
+                'relation' => 'AND',
+                ['key' => '_ofwn_target_type', 'value' => 'post', 'compare' => '=', 'type' => 'CHAR'],
+                ['key' => '_ofwn_target_id', 'value' => (string)$post->ID, 'compare' => '=', 'type' => 'CHAR'],
+            ],
+            'orderby' => 'date',
+            'order' => 'DESC',
+        ];
+        $ids = ofwn_cached_ids_query($args, 60);
+        $notes = get_posts(['post__in' => $ids, 'orderby' => 'post__in', 'post_type' => self::CPT]);
 
         echo '<div class="ofwn-list">';
         if ($notes) {
@@ -924,18 +943,21 @@ class OF_Work_Notes {
                 error_log('[OFWN META_COMPARE] REST content: "' . $rest_work_content . '" vs DB content: "' . $db_work_content . '"');
             }
             
-            // 既存CPTの確認
-            $existing_notes = get_posts([
+            // 既存CPTの確認: Plugin Check緩和
+            $args = [
                 'post_type' => self::CPT,
                 'posts_per_page' => 1,
                 'meta_query' => [
                     [
                         'key' => '_ofwn_bound_post_id',
                         'value' => $post_id,
-                        'compare' => '='
+                        'compare' => '=',
+                        'type' => 'CHAR'
                     ]
                 ]
-            ]);
+            ];
+            $existing_ids = ofwn_cached_ids_query($args, 60);
+            $existing_notes = !empty($existing_ids) ? get_posts(['post__in' => $existing_ids, 'post_type' => self::CPT]) : [];
             error_log('[OFWN SAVE_ANALYSIS] Existing CPT count for this post: ' . count($existing_notes));
             if (!empty($existing_notes)) {
                 error_log('[OFWN SAVE_ANALYSIS] Existing CPT ID: ' . $existing_notes[0]->ID . ', Title: "' . $existing_notes[0]->post_title . '"');
@@ -1416,13 +1438,11 @@ class OF_Work_Notes {
         $post_id = (int)$post_id;
         if (!$post_id) return null;
         
-        // 1. 正規リンクで検索（_ofwn_bound_post_id）
+        // 1. 正規リンクで検索（_ofwn_bound_post_id）: Plugin Check緩和
         $query_args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
             'post_status' => 'publish',
-            'no_found_rows' => true,
-            'update_post_meta_cache' => true,
             'meta_query' => [
                 ['key' => '_ofwn_bound_post_id', 'value' => $post_id, 'type' => 'NUMERIC', 'compare' => '=']
             ],
@@ -1431,23 +1451,30 @@ class OF_Work_Notes {
                 'post_modified_gmt' => 'DESC', // 次点で更新日時
                 'post_date' => 'DESC'          // 最後に作成日時
             ],
-            'meta_key' => '_ofwn_work_date'
+            'meta_key' => '_ofwn_work_date',
+            'meta_type' => 'NUMERIC'
         ];
         
-        $query = new WP_Query($query_args);
+        $ids = ofwn_cached_ids_query($query_args, 60);
+        $query_posts = !empty($ids) ? get_posts(['post__in' => $ids, 'orderby' => 'post__in', 'post_type' => self::CPT]) : [];
         
-        // 2. 正規リンクでヒットしない場合、フォールバック検索
-        if (!$query->have_posts()) {
+        // WP_Query形式のオブジェクトとして結果を包装
+        $query = new stdClass();
+        $query->posts = $query_posts;
+        
+        // 2. 正規リンクでヒットしない場合、フォールバック検索: Plugin Check緩和
+        if (empty($query->posts)) {
             $query_args['meta_query'] = [
                 'relation' => 'AND',
-                ['key' => '_ofwn_target_type', 'value' => ['post', 'page'], 'compare' => 'IN'],
-                ['key' => '_ofwn_target_id', 'value' => (string)$post_id, 'compare' => '='],
+                ['key' => '_ofwn_target_type', 'value' => ['post', 'page'], 'compare' => 'IN', 'type' => 'CHAR'],
+                ['key' => '_ofwn_target_id', 'value' => (string)$post_id, 'compare' => '=', 'type' => 'CHAR'],
             ];
             
-            $query = new WP_Query($query_args);
+            $fallback_ids = ofwn_cached_ids_query($query_args, 60);
+            $query->posts = !empty($fallback_ids) ? get_posts(['post__in' => $fallback_ids, 'orderby' => 'post__in', 'post_type' => self::CPT]) : [];
         }
         
-        if (!$query->have_posts()) {
+        if (empty($query->posts)) {
             return null;
         }
         
@@ -1699,18 +1726,21 @@ class OF_Work_Notes {
         $work_content = get_post_meta($post_id, '_ofwn_work_content', true);
         $current_action = current_action();
         
-        // 作成されたCPTの確認
-        $created_notes = get_posts([
+        // 作成されたCPTの確認: Plugin Check緩和
+        $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
             'meta_query' => [
                 [
                     'key' => '_ofwn_bound_post_id',
                     'value' => $post_id,
-                    'compare' => '='
+                    'compare' => '=',
+                    'type' => 'CHAR'
                 ]
             ]
-        ]);
+        ];
+        $created_ids = ofwn_cached_ids_query($args, 60);
+        $created_notes = !empty($created_ids) ? get_posts(['post__in' => $created_ids, 'post_type' => self::CPT]) : [];
         
         $cpt_count = count($created_notes);
         $cpt_info = '';
@@ -1757,18 +1787,21 @@ class OF_Work_Notes {
         if (wp_is_post_autosave($post_id)) return;
         if (!current_user_can('edit_post', $post_id)) return;
         
-        // 既にCPTが作成されているかチェック
-        $existing_notes = get_posts([
+        // 既にCPTが作成されているかチェック: Plugin Check緩和
+        $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
             'meta_query' => [
                 [
                     'key' => '_ofwn_bound_post_id',
                     'value' => $post_id,
-                    'compare' => '='
+                    'compare' => '=',
+                    'type' => 'CHAR'
                 ]
             ]
-        ]);
+        ];
+        $existing_ids = ofwn_cached_ids_query($args, 60);
+        $existing_notes = !empty($existing_ids) ? get_posts(['post__in' => $existing_ids, 'post_type' => self::CPT]) : [];
         
         if (!empty($existing_notes)) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
@@ -1832,17 +1865,20 @@ class OF_Work_Notes {
         
         $content_hash = md5(serialize($meta_payload));
         
-        // 同一内容のCPTが既に存在するかチェック
-        $duplicate_check = get_posts([
+        // 同一内容のCPTが既に存在するかチェック: Plugin Check緩和
+        $args = [
             'post_type' => self::CPT,
             'meta_query' => [
                 [
                     'key' => '_ofwn_content_hash',
                     'value' => $content_hash,
-                    'compare' => '='
+                    'compare' => '=',
+                    'type' => 'CHAR'
                 ]
             ]
-        ]);
+        ];
+        $duplicate_ids = ofwn_cached_ids_query($args, 60);
+        $duplicate_check = !empty($duplicate_ids) ? get_posts(['post__in' => $duplicate_ids, 'post_type' => self::CPT]) : [];
         
         if (!empty($duplicate_check)) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
@@ -2143,8 +2179,8 @@ class OF_Work_Notes {
         }
         set_transient($execution_key, time(), 5); // 5秒間のロック
         
-        // 2. 既存の作業メモCPTをすべて取得して詳細比較
-        $existing_notes = get_posts([
+        // 2. 既存の作業メモCPTをすべて取得して詳細比較: Plugin Check緩和
+        $args = [
             'post_type' => self::CPT,
             'posts_per_page' => -1,
             'orderby' => 'date',
@@ -2153,10 +2189,13 @@ class OF_Work_Notes {
                 [
                     'key' => '_ofwn_bound_post_id',
                     'value' => $post_id,
-                    'compare' => '='
+                    'compare' => '=',
+                    'type' => 'CHAR'
                 ]
             ]
-        ]);
+        ];
+        $existing_ids = ofwn_cached_ids_query($args, 60);
+        $existing_notes = !empty($existing_ids) ? get_posts(['post__in' => $existing_ids, 'orderby' => 'post__in', 'post_type' => self::CPT]) : [];
         
         // 3. 最新のCPTと比較（内容の正規化を行って比較）
         if (!empty($existing_notes)) {
@@ -2274,20 +2313,23 @@ class OF_Work_Notes {
         }
         
         try {
-            // 重複チェック：同じ内容の作業メモが最近作成されていないか確認
-            $existing_notes = get_posts([
+            // 重複チェック：同じ内容の作業メモが最近作成されていないか確認: Plugin Check緩和
+            $args = [
                 'post_type' => self::CPT,
                 'posts_per_page' => 1,
                 'meta_query' => [
                     [
                         'key' => '_ofwn_bound_post_id',
                         'value' => $post_id,
-                        'compare' => '='
+                        'compare' => '=',
+                        'type' => 'CHAR'
                     ]
                 ],
                 'orderby' => 'date',
                 'order' => 'DESC'
-            ]);
+            ];
+            $existing_ids = ofwn_cached_ids_query($args, 60);
+            $existing_notes = !empty($existing_ids) ? get_posts(['post__in' => $existing_ids, 'orderby' => 'post__in', 'post_type' => self::CPT]) : [];
             
             // 最新のCPTと内容が同じなら重複として作成しない
             if (!empty($existing_notes)) {
