@@ -458,7 +458,7 @@ class OF_Work_Notes {
             $old_value = get_post_meta($post_id, $meta, true);
             
             if (is_string($fieldOrValue) && isset($_POST[$fieldOrValue])) {
-                $new_value = sanitize_text_field($_POST[$fieldOrValue]);
+                $new_value = sanitize_text_field(wp_unslash($_POST[$fieldOrValue]));
                 update_post_meta($post_id, $meta, $new_value);
                 if ($debug_log && $old_value !== $new_value) {
                     error_log('[OFWN] Updated ' . $meta . ': "' . $old_value . '" -> "' . $new_value . '"');
@@ -492,8 +492,8 @@ class OF_Work_Notes {
     }
 
     private function resolve_select_or_custom($baseName) {
-        $sel = $_POST[$baseName . '_select'] ?? '';
-        $custom = $_POST[$baseName] ?? '';
+        $sel = sanitize_text_field(wp_unslash($_POST[$baseName . '_select'] ?? ''));
+        $custom = sanitize_text_field(wp_unslash($_POST[$baseName] ?? ''));
         if ($sel === '__custom__') return $custom;
         return $sel ?: $custom;
     }
@@ -820,8 +820,8 @@ class OF_Work_Notes {
         if ($content === '') return;
 
         $requester = $this->resolve_select_or_custom('ofwn_quick_requester');
-        $status    = sanitize_text_field($_POST['ofwn_quick_status'] ?? '依頼');
-        $date      = sanitize_text_field($_POST['ofwn_quick_date'] ?? current_time('Y-m-d'));
+        $status    = sanitize_text_field(wp_unslash($_POST['ofwn_quick_status'] ?? '依頼'));
+        $date      = sanitize_text_field(wp_unslash($_POST['ofwn_quick_date'] ?? current_time('Y-m-d')));
         $workerVal = $this->resolve_select_or_custom('ofwn_quick_worker');
 
         $note_id = wp_insert_post([
@@ -2257,8 +2257,8 @@ class OF_Work_Notes {
         
         // パラメータ取得
         $post_id = intval($_POST['post_id'] ?? 0);
-        $work_title = sanitize_text_field($_POST['work_title'] ?? '');
-        $work_content = wp_kses_post($_POST['work_content'] ?? '');
+        $work_title = sanitize_text_field(wp_unslash($_POST['work_title'] ?? ''));
+        $work_content = wp_kses_post(wp_unslash($_POST['work_content'] ?? ''));
         $requester = sanitize_text_field($_POST['requester'] ?? '');
         $worker = sanitize_text_field($_POST['worker'] ?? '');
         $status = sanitize_text_field($_POST['status'] ?? '依頼');
