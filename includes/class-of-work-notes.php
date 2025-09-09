@@ -1672,9 +1672,9 @@ class OF_Work_Notes {
         ]);
         
         if (is_wp_error($response)) {
-            /* translators: 1: test file URL, 2: error message */
             wp_send_json_error([
                 'message' => sprintf(
+                    /* translators: 1: test file URL, 2: error message */
                     __('テストURL %1$s へのアクセスに失敗: %2$s', 'work-notes'),
                     esc_url($test_url),
                     esc_html($response->get_error_message())
