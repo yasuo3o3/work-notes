@@ -149,7 +149,7 @@ class OF_Work_Notes {
         }
         
         // edit.php?post_type=of_work_note
-        if ($hook === 'edit.php' && isset($_GET['post_type']) && $_GET['post_type'] === self::CPT) {
+        if ($hook === 'edit.php' && isset($_GET['post_type']) && sanitize_text_field(wp_unslash($_GET['post_type'])) === self::CPT) {
             $is_work_notes_screen = true;
         }
         
@@ -186,8 +186,8 @@ class OF_Work_Notes {
      * 旧設定ページへのアクセスを作業ログ設定にリダイレクト
      */
     public function handle_legacy_settings_redirect() {
-        if (isset($_GET['post_type']) && $_GET['post_type'] === self::CPT &&
-            isset($_GET['page']) && $_GET['page'] === 'ofwn-settings') {
+        if (isset($_GET['post_type']) && sanitize_text_field(wp_unslash($_GET['post_type'])) === self::CPT &&
+            isset($_GET['page']) && sanitize_text_field(wp_unslash($_GET['page'])) === 'ofwn-settings') {
             wp_redirect(admin_url('edit.php?post_type=' . self::CPT . '&page=ofwn-worklog-settings'));
             exit;
         }
@@ -436,7 +436,7 @@ class OF_Work_Notes {
         
         // 自動保存スキップ
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
-            if ($debug_log) error_log('[OFWN] Skipping autosave');
+            if ($debug_log) ofwn_log('Skipping autosave');
             return;
         }
         
@@ -448,13 +448,13 @@ class OF_Work_Notes {
         
         // 投稿タイプチェック
         if (self::CPT !== get_post_type($post_id)) {
-            if ($debug_log) error_log('[OFWN] Wrong post type: ' . get_post_type($post_id));
+            if ($debug_log) ofwn_log('Wrong post type: ' . get_post_type($post_id));
             return;
         }
         
         // Quick Edit 対策：メタフィールドが存在しない場合はスキップ
         if (!isset($_POST['ofwn_requester_select']) && !isset($_POST['ofwn_requester'])) {
-            if ($debug_log) error_log('[OFWN] Meta fields not present, possibly Quick Edit - skipping');
+            if ($debug_log) ofwn_log(' Meta fields not present, possibly Quick Edit - skipping');
             return;
         }
 
@@ -485,13 +485,13 @@ class OF_Work_Notes {
                 $new_value = sanitize_text_field(wp_unslash($_POST[$fieldOrValue]));
                 update_post_meta($post_id, $meta, $new_value);
                 if ($debug_log && $old_value !== $new_value) {
-                    error_log('[OFWN] Updated ' . $meta . ': "' . $old_value . '" -> "' . $new_value . '"');
+                    ofwn_log('Updated ' . $meta . ': "' . $old_value . '" -> "' . $new_value . '"');
                 }
             } elseif (!is_string($fieldOrValue) && $fieldOrValue !== null) {
                 $new_value = sanitize_text_field($fieldOrValue);
                 update_post_meta($post_id, $meta, $new_value);
                 if ($debug_log && $old_value !== $new_value) {
-                    error_log('[OFWN] Updated ' . $meta . ': "' . $old_value . '" -> "' . $new_value . '"');
+                    ofwn_log('Updated ' . $meta . ': "' . $old_value . '" -> "' . $new_value . '"');
                 }
             }
         }
@@ -500,8 +500,8 @@ class OF_Work_Notes {
         if ($debug_log) {
             $saved_req = get_post_meta($post_id, '_ofwn_requester', true);
             $saved_worker = get_post_meta($post_id, '_ofwn_worker', true);
-            error_log('[OFWN] Post-save verification: requester=' . $saved_req . ', worker=' . $saved_worker);
-            error_log('[OFWN] Using standard post_title/post_content for work title and content');
+            ofwn_log(' Post-save verification: requester=' . $saved_req . ', worker=' . $saved_worker);
+            ofwn_log(' Using standard post_title/post_content for work title and content');
         }
 
         if (empty($_POST['post_title'])) {
@@ -750,7 +750,7 @@ class OF_Work_Notes {
         
         // デバッグログ用（WP_DEBUG_LOG 有効時のみ）
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            error_log('[OFWN] Meta fields registered for block editor compatibility');
+            ofwn_log(' Meta fields registered for block editor compatibility');
         }
     }
 
@@ -879,7 +879,7 @@ class OF_Work_Notes {
         // 投稿タイプの制限：postとpageのみ対象（CPT自身は除外）
         if (!in_array($post->post_type, ['post', 'page'])) {
             if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] Skipping auto-create for post_type: ' . $post->post_type . ' (ID: ' . $post_id . ')');
+                ofwn_log(' Skipping auto-create for post_type: ' . $post->post_type . ' (ID: ' . $post_id . ')');
             }
             return;
         }
@@ -923,14 +923,14 @@ class OF_Work_Notes {
             $can_edit = current_user_can('edit_post', $post_id) ? 'true' : 'false';
             $post_status = get_post_status($post_id);
             
-            error_log('[OFWN SAVE_ANALYSIS] === 保存処理開始 ===');
-            error_log('[OFWN SAVE_ANALYSIS] Post ID: ' . $post_id . ', Type: ' . $post->post_type . ', Status: ' . $post_status);
-            error_log('[OFWN SAVE_ANALYSIS] Context: Action=' . $current_action . ', Autosave=' . $doing_autosave . ', REST=' . ($is_rest_request ? 'true' : 'false') . ', Revision=' . $is_revision . ', CanEdit=' . $can_edit);
+            ofwn_log('=== 保存処理開始 ===');
+            ofwn_log('Post ID: ' . $post_id . ', Type: ' . $post->post_type . ', Status: ' . $post_status);
+            ofwn_log('Context: Action=' . $current_action . ', Autosave=' . $doing_autosave . ', REST=' . ($is_rest_request ? 'true' : 'false') . ', Revision=' . $is_revision . ', CanEdit=' . $can_edit);
             
             // メタデータ取得方法とその結果をログ出力
             $meta_source = $is_rest_request && isset($_POST['meta']) ? 'REST_POST' : 'get_post_meta';
-            error_log('[OFWN META_LATEST] Source: ' . $meta_source . ', title="' . $work_title_check . '", content="' . $work_content_check . '"');
-            error_log('[OFWN META_LATEST] Other meta: requester="' . $requester . '", worker="' . $worker . '", status="' . $status . '"');
+            ofwn_log('Source: ' . $meta_source . ', title="' . $work_title_check . '", content="' . $work_content_check . '"');
+            ofwn_log('Other meta: requester="' . $requester . '", worker="' . $worker . '", status="' . $status . '"');
             
             // RESTリクエスト時の詳細比較
             if ($is_rest_request && isset($_POST['meta'])) {
@@ -939,8 +939,8 @@ class OF_Work_Notes {
                 $db_work_title = get_post_meta($post_id, '_ofwn_work_title', true);
                 $db_work_content = get_post_meta($post_id, '_ofwn_work_content', true);
                 
-                error_log('[OFWN META_COMPARE] REST title: "' . $rest_work_title . '" vs DB title: "' . $db_work_title . '"');
-                error_log('[OFWN META_COMPARE] REST content: "' . $rest_work_content . '" vs DB content: "' . $db_work_content . '"');
+                ofwn_log('META_COMPARE] REST title: "' . $rest_work_title . '" vs DB title: "' . $db_work_title . '"');
+                ofwn_log('META_COMPARE] REST content: "' . $rest_work_content . '" vs DB content: "' . $db_work_content . '"');
             }
             
             // 既存CPTの確認: Plugin Check緩和
@@ -958,9 +958,9 @@ class OF_Work_Notes {
             ];
             $existing_ids = ofwn_cached_ids_query($args, 60);
             $existing_notes = !empty($existing_ids) ? get_posts(['post__in' => $existing_ids, 'post_type' => self::CPT]) : [];
-            error_log('[OFWN SAVE_ANALYSIS] Existing CPT count for this post: ' . count($existing_notes));
+            ofwn_log('SAVE_ANALYSIS] Existing CPT count for this post: ' . count($existing_notes));
             if (!empty($existing_notes)) {
-                error_log('[OFWN SAVE_ANALYSIS] Existing CPT ID: ' . $existing_notes[0]->ID . ', Title: "' . $existing_notes[0]->post_title . '"');
+                ofwn_log('SAVE_ANALYSIS] Existing CPT ID: ' . $existing_notes[0]->ID . ', Title: "' . $existing_notes[0]->post_title . '"');
             }
         }
         
@@ -983,8 +983,8 @@ class OF_Work_Notes {
                 'status' => !empty($status) ? 'set' : 'empty',
                 'work_date' => !empty($work_date) ? 'set' : 'empty'
             ];
-            error_log('[OFWN CONTENT_CHECK] Fields status: ' . wp_json_encode($fields_status));
-            error_log('[OFWN CONTENT_CHECK] has_work_fields=' . ($has_work_fields ? 'true' : 'false') . ' has_other_fields=' . ($has_other_fields ? 'true' : 'false') . ' final_decision=' . ($has_content ? 'proceed' : 'skip'));
+            ofwn_log('CONTENT_CHECK] Fields status: ' . wp_json_encode($fields_status));
+            ofwn_log('CONTENT_CHECK] has_work_fields=' . ($has_work_fields ? 'true' : 'false') . ' has_other_fields=' . ($has_other_fields ? 'true' : 'false') . ' final_decision=' . ($has_content ? 'proceed' : 'skip'));
         }
         
         // コンソール出力（ブラウザ開発者ツールで確認可能）
@@ -998,14 +998,14 @@ class OF_Work_Notes {
             });
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] SKIP: No content detected - work_title="' . $work_title_check . '" work_content="' . $work_content_check . '" other_fields_empty=true');
+                ofwn_log('SAVE_ANALYSIS] SKIP: No content detected - work_title="' . $work_title_check . '" work_content="' . $work_content_check . '" other_fields_empty=true');
             }
             return;
         } else {
             // 処理続行の場合もログ出力
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 $reason = $has_work_fields ? 'work_fields_present' : 'other_fields_present';
-                error_log('[OFWN SAVE_ANALYSIS] PROCEED: Content detected, reason=' . $reason);
+                ofwn_log('SAVE_ANALYSIS] PROCEED: Content detected, reason=' . $reason);
             }
         }
         
@@ -1017,7 +1017,7 @@ class OF_Work_Notes {
             $both_work_fields_empty = $work_title_empty && $work_content_empty;
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN REST_CHECK] work_title_empty=' . ($work_title_empty ? 'true' : 'false') . ' work_content_empty=' . ($work_content_empty ? 'true' : 'false'));
+                ofwn_log('REST_CHECK] work_title_empty=' . ($work_title_empty ? 'true' : 'false') . ' work_content_empty=' . ($work_content_empty ? 'true' : 'false'));
             }
             
             // 作業フィールドが両方空で、かつ他のメタフィールドも空の場合のみ保留
@@ -1026,7 +1026,7 @@ class OF_Work_Notes {
                 
                 if ($other_meta_empty) {
                     if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                        error_log('[OFWN SAVE_ANALYSIS] SKIP: REST request with all meta empty, flagging for retry on post ' . $post_id);
+                        ofwn_log('SAVE_ANALYSIS] SKIP: REST request with all meta empty, flagging for retry on post ' . $post_id);
                     }
                     
                     // コンソール出力
@@ -1042,7 +1042,7 @@ class OF_Work_Notes {
                 // 作業フィールドのいずれかがある場合は即座に処理
                 delete_post_meta($post_id, '_ofwn_pending_cpt_creation');
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN SAVE_ANALYSIS] REST work fields present, proceeding immediately');
+                    ofwn_log('SAVE_ANALYSIS] REST work fields present, proceeding immediately');
                 }
             }
         }
@@ -1051,7 +1051,7 @@ class OF_Work_Notes {
         $pending_flag = get_post_meta($post_id, '_ofwn_pending_cpt_creation', true);
         if ($pending_flag) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] Processing delayed CPT creation for post ' . $post_id);
+                ofwn_log('SAVE_ANALYSIS] Processing delayed CPT creation for post ' . $post_id);
             }
             
             // コンソール出力
@@ -1083,13 +1083,13 @@ class OF_Work_Notes {
         // ハッシュによる重複防止チェック（簡素化）
         $hash_result = ($current_hash === $last_hash) ? 'same' : 'diff';
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            error_log('[OFWN] hash current=' . substr($current_hash, 0, 8) . ' last=' . substr($last_hash ?: 'none', 0, 8) . ' result=' . $hash_result);
+            ofwn_log(' hash current=' . substr($current_hash, 0, 8) . ' last=' . substr($last_hash ?: 'none', 0, 8) . ' result=' . $hash_result);
         }
         
         // ハッシュが同じなら重複作成を防止してスキップ
         if ($current_hash === $last_hash) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_POST] SKIP: Hash unchanged - preventing duplicate creation');
+                ofwn_log('SAVE_POST] SKIP: Hash unchanged - preventing duplicate creation');
             }
             return;
         }
@@ -1098,13 +1098,13 @@ class OF_Work_Notes {
         $recent_create_flag = get_transient('ofwn_recent_create_' . $post_id);
         if ($recent_create_flag) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_POST] SKIP: Recent creation detected, avoiding duplicate');
+                ofwn_log('SAVE_POST] SKIP: Recent creation detected, avoiding duplicate');
             }
             return;
         }
         
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            error_log('[OFWN SAVE_POST] Proceeding with CPT creation: hash changed');
+            ofwn_log('SAVE_POST] Proceeding with CPT creation: hash changed');
         }
         
         // 作業メモCPT作成または更新処理
@@ -1115,24 +1115,24 @@ class OF_Work_Notes {
         if (!empty($user_work_title)) {
             $note_title = sanitize_text_field($user_work_title);
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] Using user work_title as post_title: ' . $note_title);
+                ofwn_log('SAVE_ANALYSIS] Using user work_title as post_title: ' . $note_title);
             }
         } else {
             $note_title = '作業メモ ' . current_time('Y-m-d H:i');
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] No work_title found, using fallback: ' . $note_title);
+                ofwn_log('SAVE_ANALYSIS] No work_title found, using fallback: ' . $note_title);
             }
         }
         
         if (!empty($user_work_content)) {
             $note_content = wp_kses_post($user_work_content);
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] Using user work_content as post_content');
+                ofwn_log('SAVE_ANALYSIS] Using user work_content as post_content');
             }
         } else {
             $note_content = $this->generate_work_note_content($meta_payload, $post);
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] No work_content found, using generated content');
+                ofwn_log('SAVE_ANALYSIS] No work_content found, using generated content');
             }
         }
         
@@ -1153,13 +1153,13 @@ class OF_Work_Notes {
             clean_post_cache($post_id);
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN ALWAYS_CREATE] New CPT created successfully: id=' . $note_id . ' title="' . $note_title . '"');
+                ofwn_log('ALWAYS_CREATE] New CPT created successfully: id=' . $note_id . ' title="' . $note_title . '"');
             }
         }
         
         if (!is_wp_error($note_id) && $note_id) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] === CPT作成成功 === ID: ' . $note_id . ', Title: "' . $note_title . '"');
+                ofwn_log('SAVE_ANALYSIS] === CPT作成成功 === ID: ' . $note_id . ', Title: "' . $note_title . '"');
             }
             
             // 作業メモCPTにメタデータを設定
@@ -1173,7 +1173,7 @@ class OF_Work_Notes {
             
             // 旧処理：CPTへのメタフィールド転送は不要（post_title/post_contentに直接保存済み）
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN SAVE_ANALYSIS] CPT created with direct post_title/post_content - no meta transfer needed');
+                ofwn_log('SAVE_ANALYSIS] CPT created with direct post_title/post_content - no meta transfer needed');
             }
             
             // 正規リンク用メタフィールドを設定
@@ -1191,14 +1191,14 @@ class OF_Work_Notes {
             update_post_meta($post_id, '_ofwn_bound_cpt_id', $note_id);
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN PHASE2] Parent post ' . $post_id . ' bound to CPT ' . $note_id . ' (total CPTs: ' . count($existing_cpt_ids) . ')');
+                ofwn_log('PHASE2] Parent post ' . $post_id . ' bound to CPT ' . $note_id . ' (total CPTs: ' . count($existing_cpt_ids) . ')');
             }
             
             // 重複防止用ハッシュをCPT更新成功後に1回のみ更新
             if (!is_wp_error($note_id) && $note_id) {
                 $hash_sync_result = update_post_meta($post_id, '_ofwn_last_sync_hash', $current_hash);
                 if (!$hash_sync_result && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN] hash-sync failed for post ' . $post_id);
+                    ofwn_log(' hash-sync failed for post ' . $post_id);
                 }
                 
                 // 全体キャッシュクリア（一覧への即時反映担保）
@@ -1208,13 +1208,13 @@ class OF_Work_Notes {
                 set_transient('ofwn_recent_create_' . $post_id, 1, 1);
                 
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN] hash synced successfully: ' . substr($current_hash, 0, 8));
+                    ofwn_log(' hash synced successfully: ' . substr($current_hash, 0, 8));
                 }
             }
             
             // 並び戦略をログ出力（案A採用を明記）
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG && !get_transient('ofwn_strategy_logged')) {
-                error_log('[OFWN] orderby=date strategy=A (post_date updated to current time)');
+                ofwn_log(' orderby=date strategy=A (post_date updated to current time)');
                 set_transient('ofwn_strategy_logged', 1, HOUR_IN_SECONDS);
             }
         }
@@ -1634,8 +1634,17 @@ class OF_Work_Notes {
             header('ETag: "' . md5($file_path . $last_modified) . '"');
         }
         
-        // ファイル出力
-        readfile($file_path);
+        // ファイル出力: WP_Filesystem 使用
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        WP_Filesystem();
+        global $wp_filesystem;
+        
+        $content = $wp_filesystem->get_contents($file_path);
+        if (false === $content) {
+            wp_die(__('ファイルの読み込みに失敗しました。', 'work-notes'), __('エラー', 'work-notes'), ['response' => 500]);
+        }
+        
+        echo $content;
     }
     
     /**
@@ -1710,7 +1719,7 @@ class OF_Work_Notes {
         $current_action = current_action();
         $is_rest = defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false';
         
-        error_log('[OFWN TIMING EARLY] Hook: ' . $current_action . ', Post: ' . $post_id . ', REST: ' . $is_rest . ', Title: "' . $work_title . '", Content: "' . $work_content . '"');
+        ofwn_log('TIMING EARLY] Hook: ' . $current_action . ', Post: ' . $post_id . ', REST: ' . $is_rest . ', Title: "' . $work_title . '", Content: "' . $work_content . '"');
     }
     
     /**
@@ -1749,7 +1758,7 @@ class OF_Work_Notes {
             $cpt_info = ' CPT_ID: ' . $note->ID . ', CPT_Title: "' . $cpt_title . '", CPT_Content: "' . $cpt_content . '"';
         }
         
-        error_log('[OFWN TIMING LATE] Hook: ' . $current_action . ', Post: ' . $post_id . ', Title: "' . $work_title . '", Content: "' . $work_content . '", CPT_Count: ' . $cpt_count . $cpt_info);
+        ofwn_log('TIMING LATE] Hook: ' . $current_action . ', Post: ' . $post_id . ', Title: "' . $work_title . '", Content: "' . $work_content . '", CPT_Count: ' . $cpt_count . $cpt_info);
     }
     
     /**
@@ -1770,8 +1779,8 @@ class OF_Work_Notes {
         $is_rest = defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false';
         $update_status = $update ? 'update' : 'new';
         
-        error_log('[OFWN][wp_after_insert] Post: ' . $post_id . ', Type: ' . $post->post_type . ', Update: ' . $update_status . ', REST: ' . $is_rest);
-        error_log('[OFWN][wp_after_insert] work_title="' . $work_title . '" work_content="' . $work_content . '" requester="' . $requester . '" worker="' . $worker . '" status="' . $status . '" work_date="' . $work_date . '" target_label="' . $target_label . '"');
+        ofwn_log('[wp_after_insert] Post: ' . $post_id . ', Type: ' . $post->post_type . ', Update: ' . $update_status . ', REST: ' . $is_rest);
+        ofwn_log('[wp_after_insert] work_title="' . $work_title . '" work_content="' . $work_content . '" requester="' . $requester . '" worker="' . $worker . '" status="' . $status . '" work_date="' . $work_date . '" target_label="' . $target_label . '"');
     }
     
     /**
@@ -1803,7 +1812,7 @@ class OF_Work_Notes {
         
         if (!empty($existing_notes)) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN][fallback] CPT already exists for post ' . $post_id . ', skipping fallback creation');
+                ofwn_log('[fallback] CPT already exists for post ' . $post_id . ', skipping fallback creation');
             }
             return; // 既にCPTが存在する場合はスキップ
         }
@@ -1824,7 +1833,7 @@ class OF_Work_Notes {
         if (!$has_content) return;
         
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            error_log('[OFWN][fallback] Creating CPT via wp_after_insert_post for post ' . $post_id);
+            ofwn_log('[fallback] Creating CPT via wp_after_insert_post for post ' . $post_id);
         }
         
         // auto_create_work_note_from_meta と同じロジックでCPT作成
@@ -1880,7 +1889,7 @@ class OF_Work_Notes {
         
         if (!empty($duplicate_check)) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] Duplicate work note detected, skipping creation for post ' . $post_id);
+                ofwn_log(' Duplicate work note detected, skipping creation for post ' . $post_id);
             }
             return;
         }
@@ -1908,12 +1917,13 @@ class OF_Work_Notes {
         
         if ($work_note_id && !is_wp_error($work_note_id)) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN] Auto-created work note ID: ' . $work_note_id . ' for post ID: ' . $post_id . ' (elapsed: ' . (microtime(true) * 1000 - $_SERVER['REQUEST_TIME_FLOAT'] * 1000) . 'ms)');
+                $request_time = isset($_SERVER['REQUEST_TIME_FLOAT']) ? (float)$_SERVER['REQUEST_TIME_FLOAT'] : microtime(true);
+                ofwn_log('Auto-created work note ID: ' . $work_note_id . ' for post ID: ' . $post_id . ' (elapsed: ' . (microtime(true) * 1000 - $request_time * 1000) . 'ms)');
             }
         } else {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 $error_msg = is_wp_error($work_note_id) ? $work_note_id->get_error_message() : 'Unknown error';
-                error_log('[OFWN] Failed to create work note for post ' . $post_id . ': ' . $error_msg);
+                ofwn_log(' Failed to create work note for post ' . $post_id . ': ' . $error_msg);
             }
         }
     }
@@ -1962,7 +1972,7 @@ class OF_Work_Notes {
                 $needs_migration = true;
                 
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN] Migration: title "' . $current_title . '" -> "' . $new_title . '"');
+                    ofwn_log(' Migration: title "' . $current_title . '" -> "' . $new_title . '"');
                 }
             }
         }
@@ -1974,7 +1984,7 @@ class OF_Work_Notes {
                 $needs_migration = true;
                 
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN] Migration: migrating legacy content to post_content');
+                    ofwn_log(' Migration: migrating legacy content to post_content');
                 }
             }
         }
@@ -1989,11 +1999,11 @@ class OF_Work_Notes {
                 update_post_meta($post_id, '_ofwn_migrated_to_post_fields', current_time('Y-m-d H:i:s'));
                 
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN] Successfully migrated legacy meta to post fields for CPT ID: ' . $post_id);
+                    ofwn_log(' Successfully migrated legacy meta to post fields for CPT ID: ' . $post_id);
                 }
             } else {
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN] Migration failed for CPT ID ' . $post_id . ': ' . $result->get_error_message());
+                    ofwn_log(' Migration failed for CPT ID ' . $post_id . ': ' . $result->get_error_message());
                 }
             }
         }
@@ -2044,7 +2054,7 @@ class OF_Work_Notes {
             clean_post_cache($parent_id);
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN PHASE2] CPT created for parent: parent=' . $parent_id . ' cpt=' . $note_id);
+                ofwn_log('PHASE2] CPT created for parent: parent=' . $parent_id . ' cpt=' . $note_id);
             }
             
             return intval($note_id);
@@ -2087,7 +2097,7 @@ class OF_Work_Notes {
         clean_post_cache($parent_id);
         
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            error_log('[OFWN PHASE1] CPT deletion cleanup: post=' . $post_id . ' parent=' . $parent_id . ' cleared_metas=' . implode(',', $deleted_metas));
+            ofwn_log('PHASE1] CPT deletion cleanup: post=' . $post_id . ' parent=' . $parent_id . ' cleared_metas=' . implode(',', $deleted_metas));
         }
     }
     
@@ -2147,20 +2157,20 @@ class OF_Work_Notes {
         }
         
         // データのクリーニング
-        $work_title = trim(strip_tags($work_title));
-        $work_content = trim(strip_tags($work_content));
+        $work_title = trim(wp_strip_all_tags($work_title, true));
+        $work_content = trim(wp_strip_all_tags($work_content, true));
         
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            error_log('[OFWN FINAL_CREATE] === wp_after_insert_post実行 ===');
-            error_log('[OFWN FINAL_CREATE] Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false'));
-            error_log('[OFWN FINAL_CREATE] REST: ' . (defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false'));
-            error_log('[OFWN FINAL_CREATE] Retrieved work_title: "' . $work_title . '", work_content: "' . $work_content . '"');
+            ofwn_log('FINAL_CREATE] === wp_after_insert_post実行 ===');
+            ofwn_log('FINAL_CREATE] Post ID: ' . $post_id . ', Update: ' . ($update ? 'true' : 'false'));
+            ofwn_log('FINAL_CREATE] REST: ' . (defined('REST_REQUEST') && REST_REQUEST ? 'true' : 'false'));
+            ofwn_log('FINAL_CREATE] Retrieved work_title: "' . $work_title . '", work_content: "' . $work_content . '"');
         }
         
         // 作業メモ関連のメタデータがない場合はスキップ
         if (empty($work_title) && empty($work_content)) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN FINAL_CREATE] No work meta found, skipping');
+                ofwn_log('FINAL_CREATE] No work meta found, skipping');
             }
             return;
         }
@@ -2171,7 +2181,7 @@ class OF_Work_Notes {
         $execution_key = 'ofwn_execution_' . $post_id . '_' . md5($work_title . $work_content);
         if (get_transient($execution_key)) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN FINAL_CREATE] SKIP: Same content execution within last 5 seconds');
+                ofwn_log('FINAL_CREATE] SKIP: Same content execution within last 5 seconds');
             }
             return;
         }
@@ -2198,13 +2208,13 @@ class OF_Work_Notes {
         // 3. 最新のCPTと比較（内容の正規化を行って比較）
         if (!empty($existing_notes)) {
             foreach ($existing_notes as $existing_note) {
-                $existing_title = trim(strip_tags(get_post_field('post_title', $existing_note->ID)));
-                $existing_content = trim(strip_tags(get_post_field('post_content', $existing_note->ID)));
+                $existing_title = trim(wp_strip_all_tags(get_post_field('post_title', $existing_note->ID), true));
+                $existing_content = trim(wp_strip_all_tags(get_post_field('post_content', $existing_note->ID), true));
                 
                 // 正規化して比較
                 if ($existing_title === $work_title && $existing_content === $work_content) {
                     if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                        error_log('[OFWN FINAL_CREATE] SKIP: Identical content found in existing CPT #' . $existing_note->ID);
+                        ofwn_log('FINAL_CREATE] SKIP: Identical content found in existing CPT #' . $existing_note->ID);
                     }
                     return;
                 }
@@ -2213,7 +2223,7 @@ class OF_Work_Notes {
             // 作成数の制限チェック（同一投稿に対して10個以上は作成しない）
             if (count($existing_notes) >= 10) {
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                    error_log('[OFWN FINAL_CREATE] SKIP: Too many work notes (' . count($existing_notes) . ') for post #' . $post_id);
+                    ofwn_log('FINAL_CREATE] SKIP: Too many work notes (' . count($existing_notes) . ') for post #' . $post_id);
                 }
                 return;
             }
@@ -2262,12 +2272,12 @@ class OF_Work_Notes {
             set_transient('ofwn_recent_create_' . $post_id, 1, 1);
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN FINAL_CREATE] SUCCESS: Created CPT ' . $note_id . ' with title: "' . $note_title . '"');
+                ofwn_log('FINAL_CREATE] SUCCESS: Created CPT ' . $note_id . ' with title: "' . $note_title . '"');
             }
         } else {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 $error_msg = is_wp_error($note_id) ? $note_id->get_error_message() : 'Unknown error';
-                error_log('[OFWN FINAL_CREATE] FAILED: ' . $error_msg);
+                ofwn_log('FINAL_CREATE] FAILED: ' . $error_msg);
             }
         }
     }
@@ -2279,15 +2289,15 @@ class OF_Work_Notes {
     public function ajax_create_work_note() {
         // デバッグログ: リクエスト受信
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            error_log('[OFWN AJAX] === AJAX作業メモ作成リクエスト受信 ===');
-            error_log('[OFWN AJAX] $_POST data: ' . print_r($_POST, true));
+            ofwn_log('=== AJAX作業メモ作成リクエスト受信 ===');
+            ofwn_log('$_POST data: ' . wp_json_encode($_POST));
         }
         
         // ノンス検証
         $nonce = $_POST['nonce'] ?? '';
         if (!wp_verify_nonce($nonce, 'ofwn_create_work_note')) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN AJAX] Nonce verification failed: received="' . $nonce . '"');
+                ofwn_log('Nonce verification failed: received="' . $nonce . '"');
             }
             wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
@@ -2296,10 +2306,10 @@ class OF_Work_Notes {
         $post_id = intval($_POST['post_id'] ?? 0);
         $work_title = sanitize_text_field(wp_unslash($_POST['work_title'] ?? ''));
         $work_content = wp_kses_post(wp_unslash($_POST['work_content'] ?? ''));
-        $requester = sanitize_text_field($_POST['requester'] ?? '');
-        $worker = sanitize_text_field($_POST['worker'] ?? '');
-        $status = sanitize_text_field($_POST['status'] ?? '依頼');
-        $work_date = sanitize_text_field($_POST['work_date'] ?? '');
+        $requester = sanitize_text_field(wp_unslash($_POST['requester'] ?? ''));
+        $worker = sanitize_text_field(wp_unslash($_POST['worker'] ?? ''));
+        $status = sanitize_text_field(wp_unslash($_POST['status'] ?? '依頼'));
+        $work_date = sanitize_text_field(wp_unslash($_POST['work_date'] ?? ''));
         
         if (!$post_id || (!$work_title && !$work_content)) {
             wp_send_json_error(['message' => __('必要なパラメータが不足しています。', 'work-notes')]);
@@ -2383,7 +2393,7 @@ class OF_Work_Notes {
             update_post_meta($post_id, '_ofwn_bound_cpt_id', $note_id);
             
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN AJAX_CREATE] SUCCESS: Created CPT ' . $note_id . ' with title: "' . $note_title . '" via AJAX');
+                ofwn_log('AJAX_CREATE] SUCCESS: Created CPT ' . $note_id . ' with title: "' . $note_title . '" via AJAX');
             }
             
             wp_send_json_success([
@@ -2395,7 +2405,7 @@ class OF_Work_Notes {
             
         } catch (Exception $e) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-                error_log('[OFWN AJAX_CREATE] ERROR: ' . $e->getMessage());
+                ofwn_log('AJAX_CREATE] ERROR: ' . $e->getMessage());
             }
             /* translators: %s: PHP exception message */
             wp_send_json_error(['message' => sprintf(__('エラーが発生しました: %1$s', 'work-notes'), esc_html($e->getMessage()))]);
