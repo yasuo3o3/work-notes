@@ -51,8 +51,8 @@ class OF_Work_Notes {
         // 旧設定ページのリダイレクト処理
         add_action('admin_init', [$this, 'handle_legacy_settings_redirect']);
 
-        // 作業一覧ページ
-        add_action('admin_menu', [$this, 'add_list_page']);
+        // 作業一覧ページ（一時的に非表示 - 「作業メモ」メニューと重複のため）
+        // add_action('admin_menu', [$this, 'add_list_page']);
         
         // 仮想配布ルート
         add_filter('query_vars', [$this, 'add_query_vars']);
