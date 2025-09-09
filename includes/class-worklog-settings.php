@@ -22,8 +22,8 @@ class OFWN_Worklog_Settings {
     public function add_settings_page() {
         add_submenu_page(
             'edit.php?post_type=of_work_note',
-            __('作業ログ設定', 'work-notes'),
-            __('作業ログ設定', 'work-notes'),
+            __('作業メモ設定', 'work-notes'),
+            __('作業メモ設定', 'work-notes'),
             'manage_options',
             'ofwn-worklog-settings',
             [$this, 'render_settings_page']
@@ -124,7 +124,7 @@ class OFWN_Worklog_Settings {
         
         ?>
         <div class="wrap">
-            <h1><?php esc_html_e('作業ログ設定', 'work-notes'); ?></h1>
+            <h1><?php esc_html_e('作業メモ設定', 'work-notes'); ?></h1>
             
             <!-- マスター管理セクション -->
             <form method="post" action="options.php">
