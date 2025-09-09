@@ -1204,7 +1204,8 @@ class OF_Work_Notes {
     private function generate_work_note_content($meta_payload, $post) {
         $content_parts = [];
         
-        $content_parts[] = sprintf('投稿「%s」の作業メモを右サイドバーから作成しました。', get_the_title($post));
+        /* translators: %s: post title */
+        $content_parts[] = sprintf(__('投稿「%1$s」の作業メモを右サイドバーから作成しました。', 'work-notes'), esc_html(get_the_title($post)));
         
         if (!empty($meta_payload['requester'])) {
             $content_parts[] = "依頼元: " . $meta_payload['requester'];
@@ -1629,11 +1630,12 @@ class OF_Work_Notes {
         ]);
         
         if (is_wp_error($response)) {
+            /* translators: 1: test file URL, 2: error message */
             wp_send_json_error([
                 'message' => sprintf(
-                    __('テストURL %s へのアクセスに失敗: %s', 'work-notes'),
+                    __('テストURL %1$s へのアクセスに失敗: %2$s', 'work-notes'),
                     esc_url($test_url),
-                    $response->get_error_message()
+                    esc_html($response->get_error_message())
                 )
             ]);
         }
@@ -1642,26 +1644,29 @@ class OF_Work_Notes {
         $content_type = wp_remote_retrieve_header($response, 'content-type');
         
         if (200 === $status_code) {
+            /* translators: 1: endpoint URL, 2: response Content-Type. Note: <br> tags are intentional. */
             wp_send_json_success([
-                'message' => sprintf(
-                    __('配布エンドポイントは正常に動作しています。<br>URL: %s<br>Content-Type: %s', 'work-notes'),
+                'message' => wp_kses_post(sprintf(
+                    __('配布エンドポイントは正常に動作しています。<br>URL: %1$s<br>Content-Type: %2$s', 'work-notes'),
                     esc_url($test_url),
-                    esc_html($content_type)
+                    esc_html($content_type)))
                 )
             ]);
         } elseif (404 === $status_code) {
+            /* translators: 1: primary file path, 2: alternative file path. Note: <br> tags are intentional. */
             wp_send_json_error([
-                'message' => sprintf(
-                    __('テストファイルが見つかりません (404)。<br>%s または %s にファイルを配置してください。', 'work-notes'),
+                'message' => wp_kses_post(sprintf(
+                    __('テストファイルが見つかりません (404)。<br>%1$s または %2$s にファイルを配置してください。', 'work-notes'),
                     esc_html(wp_upload_dir()['basedir'] . '/work-notes-updates/stable.json'),
-                    esc_html(OFWN_DIR . 'updates/stable.json')
+                    esc_html(OFWN_DIR . 'updates/stable.json')))
                 )
             ]);
         } else {
+            /* translators: 1: HTTP status code, 2: response URL */
             wp_send_json_error([
                 'message' => sprintf(
-                    __('予期しないレスポンス (HTTP %d): %s', 'work-notes'),
-                    $status_code,
+                    __('予期しないレスポンス (HTTP %1$d): %2$s', 'work-notes'),
+                    (int) $status_code,
                     esc_url($test_url)
                 )
             ]);
@@ -2315,7 +2320,8 @@ class OF_Work_Notes {
             ], true);
             
             if (is_wp_error($note_id)) {
-                wp_send_json_error(['message' => sprintf(__('CPT作成に失敗: %s', 'work-notes'), $note_id->get_error_message())]);
+                /* translators: %s: error message from WordPress */
+                wp_send_json_error(['message' => sprintf(__('CPT作成に失敗: %1$s', 'work-notes'), esc_html($note_id->get_error_message()))]);
             }
             
             // CPTメタデータを設定
@@ -2351,7 +2357,8 @@ class OF_Work_Notes {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 error_log('[OFWN AJAX_CREATE] ERROR: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => sprintf(__('エラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
+            /* translators: %s: PHP exception message */
+            wp_send_json_error(['message' => sprintf(__('エラーが発生しました: %1$s', 'work-notes'), esc_html($e->getMessage()))]);
         }
     }
     

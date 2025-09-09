@@ -430,7 +430,8 @@ class OFWN_Worklog_Settings {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 ofwn_log('CACHE_CLEAR Error: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => sprintf(__('キャッシュクリア中にエラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
+            /* translators: %s: PHP exception message */
+            wp_send_json_error(['message' => sprintf(__('キャッシュクリア中にエラーが発生しました: %1$s', 'work-notes'), esc_html($e->getMessage()))]);
         }
     }
     
@@ -668,7 +669,8 @@ class OFWN_Worklog_Settings {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 ofwn_log('CLEANUP Error: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => sprintf(__('クリーンアップ中にエラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
+            /* translators: %s: PHP exception message */
+            wp_send_json_error(['message' => sprintf(__('クリーンアップ中にエラーが発生しました: %1$s', 'work-notes'), esc_html($e->getMessage()))]);
         }
     }
     
@@ -786,7 +788,8 @@ class OFWN_Worklog_Settings {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 ofwn_log('DEBUG Error: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => sprintf(__('デバッグ情報取得中にエラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
+            /* translators: %s: PHP exception message */
+            wp_send_json_error(['message' => sprintf(__('デバッグ情報取得中にエラーが発生しました: %1$s', 'work-notes'), esc_html($e->getMessage()))]);
         }
     }
     
@@ -888,7 +891,8 @@ class OFWN_Worklog_Settings {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 ofwn_log('FIX_CPT Error: ' . $e->getMessage());
             }
-            wp_send_json_error(['message' => sprintf(__('CPT作成中にエラーが発生しました: %s', 'work-notes'), $e->getMessage())]);
+            /* translators: %s: PHP exception message */
+            wp_send_json_error(['message' => sprintf(__('CPT作成中にエラーが発生しました: %1$s', 'work-notes'), esc_html($e->getMessage()))]);
         }
     }
 }
