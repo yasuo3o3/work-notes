@@ -48,23 +48,20 @@ do {
 } while (count($posts) === $batch_size);
 
 // 念のため残ったメタデータを削除
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
     $wpdb->esc_like('_ofwn_') . '%'
 ));
 
 // 通知機能関連のメタデータも削除
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall:
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
     $wpdb->esc_like('ofwn_worklog_') . '%'
 ));
 
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall:
 $wpdb->query($wpdb->prepare(
     "DELETE FROM {$wpdb->usermeta} WHERE meta_key LIKE %s",
     $wpdb->esc_like('ofwn_worklog_') . '%'
