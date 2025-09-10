@@ -448,8 +448,14 @@ class OFWN_Worklog_Settings {
             $post_ids = $cached;
         } else {
             $placeholders = implode(',', array_fill(0, count($args), '%s'));
-            $sql = $wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders)", $args);
-            $post_ids = $wpdb->get_col($sql);
+            $q = new WP_Query([
+                'post_type' => $args,
+                'fields' => 'ids',
+                'nopaging' => true,
+                'no_found_rows' => true,
+                'suppress_filters' => true,
+            ]);
+            $post_ids = $q->posts;
             wp_cache_set($cache_key, $post_ids, 'ofwn', 300);
         }
         
@@ -472,13 +478,15 @@ class OFWN_Worklog_Settings {
         if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
             $transient_keys = $cached;
         } else {
-            $sql = $wpdb->prepare("
-                SELECT option_name FROM {$wpdb->options} 
-                WHERE option_name LIKE %s 
-                OR option_name LIKE %s
-                OR option_name LIKE %s
-            ", $args);
-            $transient_keys = $wpdb->get_col($sql);
+            $all_options = function_exists('wp_load_alloptions') ? wp_load_alloptions() : [];
+            $transient_keys = [];
+            foreach (array_keys($all_options) as $option_name) {
+                if (strpos($option_name, '_transient_ofwn_') === 0 ||
+                    strpos($option_name, '_transient_timeout_ofwn_') === 0 ||
+                    strpos($option_name, '_transient_work_notes_') === 0) {
+                    $transient_keys[] = $option_name;
+                }
+            }
             wp_cache_set($cache_key, $transient_keys, 'ofwn', 300);
         }
         
@@ -532,10 +540,7 @@ class OFWN_Worklog_Settings {
         ];
         
         foreach ($user_meta_keys as $pattern) {
-            $wpdb->query($wpdb->prepare("
-                DELETE FROM {$wpdb->usermeta} 
-                WHERE meta_key LIKE %s
-            ", $pattern));
+            delete_metadata('user', 0, str_replace('%', '', $pattern), '', true);
             // 関連キャッシュクリア
             wp_cache_delete('ofwn:' . md5($pattern . ':usermeta'), 'ofwn');
         }
@@ -548,10 +553,7 @@ class OFWN_Worklog_Settings {
         ];
         
         foreach ($post_meta_keys as $pattern) {
-            $wpdb->query($wpdb->prepare("
-                DELETE FROM {$wpdb->postmeta} 
-                WHERE meta_key LIKE %s
-            ", $pattern));
+            delete_post_meta_by_key(str_replace('%', '', $pattern));
             // 関連キャッシュクリア
             wp_cache_delete('ofwn:' . md5($pattern . ':postmeta'), 'ofwn');
         }
@@ -562,15 +564,13 @@ class OFWN_Worklog_Settings {
         ];
         
         foreach ($transient_keys as $pattern) {
-            $wpdb->query($wpdb->prepare("
-                DELETE FROM {$wpdb->options} 
-                WHERE option_name LIKE %s
-            ", '_transient_' . $pattern));
-            
-            $wpdb->query($wpdb->prepare("
-                DELETE FROM {$wpdb->options} 
-                WHERE option_name LIKE %s
-            ", '_transient_timeout_' . $pattern));
+            $all_options = function_exists('wp_load_alloptions') ? wp_load_alloptions() : [];
+            foreach (array_keys($all_options) as $option_name) {
+                if (strpos($option_name, '_transient_' . str_replace('%', '', $pattern)) === 0 ||
+                    strpos($option_name, '_transient_timeout_' . str_replace('%', '', $pattern)) === 0) {
+                    delete_option($option_name);
+                }
+            }
             
             // 関連キャッシュクリア
             wp_cache_delete('ofwn:' . md5($pattern . ':transients'), 'ofwn');
@@ -604,21 +604,36 @@ class OFWN_Worklog_Settings {
                 if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
                     $orphan_count = $cached;
                 } else {
-                    $sql = $wpdb->prepare("
-                        SELECT COUNT(*) FROM {$wpdb->postmeta} pm
-                        LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                        WHERE pm.meta_key = %s AND (p.ID IS NULL OR p.post_status = 'trash')
-                    ", $meta_key);
-                    $orphan_count = $wpdb->get_var($sql);
+                    $q = new WP_Query([
+                        'post_type' => 'any',
+                        'post_status' => 'any',
+                        'meta_query' => [[
+                            'key' => $meta_key,
+                            'compare' => 'EXISTS'
+                        ]],
+                        'fields' => 'ids',
+                        'nopaging' => true,
+                        'no_found_rows' => true,
+                        'suppress_filters' => true,
+                    ]);
+                    $all_posts_with_meta = $q->posts;
+                    $orphan_count = 0;
+                    foreach ($all_posts_with_meta as $post_id) {
+                        $post = get_post($post_id);
+                        if (!$post || $post->post_status === 'trash') {
+                            $orphan_count++;
+                        }
+                    }
                     wp_cache_set($cache_key, $orphan_count, 'ofwn', 300);
                 }
                 
                 if ($orphan_count > 0) {
-                    $wpdb->query($wpdb->prepare("
-                        DELETE pm FROM {$wpdb->postmeta} pm
-                        LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                        WHERE pm.meta_key = %s AND (p.ID IS NULL OR p.post_status = 'trash')
-                    ", $meta_key));
+                    foreach ($all_posts_with_meta as $post_id) {
+                        $post = get_post($post_id);
+                        if (!$post || $post->post_status === 'trash') {
+                            delete_post_meta($post_id, $meta_key);
+                        }
+                    }
                     
                     // 関連キャッシュクリア
                     wp_cache_delete('ofwn:' . md5(serialize([$meta_key]) . ':orphan_count'), 'ofwn');
@@ -634,17 +649,31 @@ class OFWN_Worklog_Settings {
             if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
                 $duplicate_cpts = $cached;
             } else {
-                $sql = $wpdb->prepare("
-                    SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
-                    FROM {$wpdb->postmeta} pm
-                    JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                    WHERE pm.meta_key = %s
-                    AND p.post_type = %s
-                    AND p.post_status = %s
-                    GROUP BY pm.meta_value
-                    HAVING COUNT(*) > 1
-                ", $args);
-                $duplicate_cpts = (array) $wpdb->get_results($sql);
+                $q = new WP_Query([
+                    'post_type' => $args[1],
+                    'post_status' => $args[2],
+                    'meta_query' => [[
+                        'key' => $args[0],
+                        'compare' => 'EXISTS'
+                    ]],
+                    'fields' => 'ids',
+                    'nopaging' => true,
+                    'no_found_rows' => true,
+                    'suppress_filters' => true,
+                ]);
+                $duplicate_cpts = [];
+                $parent_counts = [];
+                foreach ($q->posts as $post_id) {
+                    $parent_id = get_post_meta($post_id, $args[0], true);
+                    if ($parent_id) {
+                        $parent_counts[$parent_id] = ($parent_counts[$parent_id] ?? 0) + 1;
+                    }
+                }
+                foreach ($parent_counts as $parent_id => $count) {
+                    if ($count > 1) {
+                        $duplicate_cpts[] = (object)['parent_id' => $parent_id, 'cpt_count' => $count];
+                    }
+                }
                 wp_cache_set($cache_key, $duplicate_cpts, 'ofwn', 300);
             }
             
@@ -656,16 +685,22 @@ class OFWN_Worklog_Settings {
                 if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
                     $cpt_ids = $cached;
                 } else {
-                    $sql = $wpdb->prepare("
-                        SELECT p.ID FROM {$wpdb->posts} p
-                        JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
-                        WHERE pm.meta_key = '_ofwn_bound_post_id'
-                        AND pm.meta_value = %s
-                        AND p.post_type = 'of_work_note'
-                        ORDER BY p.post_date DESC
-                        LIMIT 999 OFFSET 1
-                    ", $dup->parent_id);
-                    $cpt_ids = $wpdb->get_col($sql);
+                    $q = new WP_Query([
+                        'post_type' => 'of_work_note',
+                        'meta_query' => [[
+                            'key' => '_ofwn_bound_post_id',
+                            'value' => $dup->parent_id,
+                            'compare' => '='
+                        ]],
+                        'orderby' => 'date',
+                        'order' => 'DESC',
+                        'posts_per_page' => 999,
+                        'offset' => 1,
+                        'fields' => 'ids',
+                        'no_found_rows' => true,
+                        'suppress_filters' => true,
+                    ]);
+                    $cpt_ids = $q->posts;
                     wp_cache_set($cache_key, $cpt_ids, 'ofwn', 300);
                 }
                 
@@ -681,10 +716,25 @@ class OFWN_Worklog_Settings {
             
             // 3. 空の作業メモメタデータを削除
             foreach (['_ofwn_work_title', '_ofwn_work_content'] as $key) {
-                $empty_count = $wpdb->query($wpdb->prepare("
-                    DELETE FROM {$wpdb->postmeta}
-                    WHERE meta_key = %s AND (meta_value = '' OR meta_value IS NULL)
-                ", $key));
+                $q = new WP_Query([
+                    'post_type' => 'any',
+                    'post_status' => 'any',
+                    'meta_query' => [[
+                        'key' => $key,
+                        'value' => '',
+                        'compare' => '='
+                    ]],
+                    'fields' => 'ids',
+                    'nopaging' => true,
+                    'no_found_rows' => true,
+                    'suppress_filters' => true,
+                ]);
+                $empty_count = 0;
+                foreach ($q->posts as $post_id) {
+                    if (delete_post_meta($post_id, $key, '')) {
+                        $empty_count++;
+                    }
+                }
                 
                 if ($empty_count > 0) {
                     // 関連キャッシュクリア
@@ -748,13 +798,20 @@ class OFWN_Worklog_Settings {
                 if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
                     $count = $cached;
                 } else {
-                    $sql = $wpdb->prepare("
-                        SELECT COUNT(DISTINCT pm.post_id) FROM {$wpdb->postmeta} pm
-                        JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                        WHERE pm.meta_key = %s AND pm.meta_value != ''
-                        AND p.post_type IN ('post', 'page') AND p.post_status = 'publish'
-                    ", $key);
-                    $count = $wpdb->get_var($sql);
+                    $q = new WP_Query([
+                        'post_type' => ['post', 'page'],
+                        'post_status' => 'publish',
+                        'meta_query' => [[
+                            'key' => $key,
+                            'value' => '',
+                            'compare' => '!='
+                        ]],
+                        'fields' => 'ids',
+                        'nopaging' => true,
+                        'no_found_rows' => true,
+                        'suppress_filters' => true,
+                    ]);
+                    $count = count($q->posts);
                     wp_cache_set($cache_key, $count, 'ofwn', 300);
                 }
                 
@@ -769,15 +826,26 @@ class OFWN_Worklog_Settings {
             if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
                 $cpt_stats = $cached;
             } else {
-                $sql = $wpdb->prepare("
-                    SELECT 
-                        COUNT(*) as total_cpts,
-                        COUNT(DISTINCT pm.meta_value) as unique_parents
-                    FROM {$wpdb->posts} p
-                    LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
-                    WHERE p.post_type = %s AND p.post_status = %s
-                ", $args);
-                $cpt_stats = $wpdb->get_row($sql);
+                $q = new WP_Query([
+                    'post_type' => $args[1],
+                    'post_status' => $args[2],
+                    'fields' => 'ids',
+                    'nopaging' => true,
+                    'no_found_rows' => true,
+                    'suppress_filters' => true,
+                ]);
+                $total_cpts = count($q->posts);
+                $unique_parents = [];
+                foreach ($q->posts as $post_id) {
+                    $parent_id = get_post_meta($post_id, $args[0], true);
+                    if ($parent_id) {
+                        $unique_parents[$parent_id] = true;
+                    }
+                }
+                $cpt_stats = (object)[
+                    'total_cpts' => $total_cpts,
+                    'unique_parents' => count($unique_parents)
+                ];
                 wp_cache_set($cache_key, $cpt_stats, 'ofwn', 300);
             }
             $debug_info['cpt_statistics'] = $cpt_stats;
@@ -789,19 +857,33 @@ class OFWN_Worklog_Settings {
             if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
                 $duplicates = $cached;
             } else {
-                $sql = $wpdb->prepare("
-                    SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
-                    FROM {$wpdb->postmeta} pm
-                    JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                    WHERE pm.meta_key = %s
-                    AND p.post_type = %s
-                    AND p.post_status = %s
-                    GROUP BY pm.meta_value
-                    HAVING COUNT(*) > 1
-                    ORDER BY cpt_count DESC
-                    LIMIT 10
-                ", $args);
-                $duplicates = (array) $wpdb->get_results($sql);
+                $q = new WP_Query([
+                    'post_type' => $args[1],
+                    'post_status' => $args[2],
+                    'meta_query' => [[
+                        'key' => $args[0],
+                        'compare' => 'EXISTS'
+                    ]],
+                    'fields' => 'ids',
+                    'nopaging' => true,
+                    'no_found_rows' => true,
+                    'suppress_filters' => true,
+                ]);
+                $parent_counts = [];
+                foreach ($q->posts as $post_id) {
+                    $parent_id = get_post_meta($post_id, $args[0], true);
+                    if ($parent_id) {
+                        $parent_counts[$parent_id] = ($parent_counts[$parent_id] ?? 0) + 1;
+                    }
+                }
+                $duplicates = [];
+                foreach ($parent_counts as $parent_id => $count) {
+                    if ($count > 1) {
+                        $duplicates[] = (object)['parent_id' => $parent_id, 'cpt_count' => $count];
+                    }
+                }
+                usort($duplicates, function($a, $b) { return $b->cpt_count - $a->cpt_count; });
+                $duplicates = array_slice($duplicates, 0, 10);
                 wp_cache_set($cache_key, $duplicates, 'ofwn', 300);
             }
             $debug_info['duplicate_cpts'] = $duplicates;
@@ -813,30 +895,37 @@ class OFWN_Worklog_Settings {
             if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
                 $meta_posts = $cached;
             } else {
-                $sql = $wpdb->prepare("
-                    SELECT 
-                        p.ID,
-                        p.post_title,
-                        p.post_type,
-                        p.post_status,
-                        p.post_modified,
-                        pm1.meta_value as work_title,
-                        pm2.meta_value as work_content,
-                        pm3.meta_value as target_label,
-                        pm4.meta_value as requester,
-                        pm5.meta_value as worker
-                    FROM {$wpdb->posts} p
-                    LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = %s
-                    WHERE p.post_type IN ('post', 'page')
-                    AND (pm1.meta_value IS NOT NULL OR pm2.meta_value IS NOT NULL OR pm3.meta_value IS NOT NULL OR pm4.meta_value IS NOT NULL OR pm5.meta_value IS NOT NULL)
-                    ORDER BY p.post_modified DESC
-                    LIMIT 20
-                ", $args);
-                $meta_posts = (array) $wpdb->get_results($sql);
+                $q = new WP_Query([
+                    'post_type' => ['post', 'page'],
+                    'meta_query' => [
+                        'relation' => 'OR',
+                        ['key' => $args[0], 'compare' => 'EXISTS'],
+                        ['key' => $args[1], 'compare' => 'EXISTS'],
+                        ['key' => $args[2], 'compare' => 'EXISTS'],
+                        ['key' => $args[3], 'compare' => 'EXISTS'],
+                        ['key' => $args[4], 'compare' => 'EXISTS']
+                    ],
+                    'orderby' => 'modified',
+                    'order' => 'DESC',
+                    'posts_per_page' => 20,
+                    'no_found_rows' => true,
+                    'suppress_filters' => true,
+                ]);
+                $meta_posts = [];
+                foreach ($q->posts as $post) {
+                    $meta_posts[] = (object)[
+                        'ID' => $post->ID,
+                        'post_title' => $post->post_title,
+                        'post_type' => $post->post_type,
+                        'post_status' => $post->post_status,
+                        'post_modified' => $post->post_modified,
+                        'work_title' => get_post_meta($post->ID, $args[0], true),
+                        'work_content' => get_post_meta($post->ID, $args[1], true),
+                        'target_label' => get_post_meta($post->ID, $args[2], true),
+                        'requester' => get_post_meta($post->ID, $args[3], true),
+                        'worker' => get_post_meta($post->ID, $args[4], true)
+                    ];
+                }
                 wp_cache_set($cache_key, $meta_posts, 'ofwn', 300);
             }
             $debug_info['meta_posts'] = $meta_posts;
@@ -848,26 +937,54 @@ class OFWN_Worklog_Settings {
             if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
                 $should_have_cpts = $cached;
             } else {
-                $sql = $wpdb->prepare("
-                    SELECT 
-                        p.ID,
-                        p.post_title,
-                        pm1.meta_value as work_title,
-                        pm2.meta_value as work_content,
-                        COUNT(cpt.ID) as existing_cpt_count
-                    FROM {$wpdb->posts} p
-                    LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = %s
-                    LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = %s AND cpt.post_status = %s
-                    WHERE p.post_type IN ('post', 'page') 
-                    AND p.post_status = %s
-                    AND (pm1.meta_value != '' OR pm2.meta_value != '')
-                    GROUP BY p.ID
-                    HAVING existing_cpt_count = 0
-                    ORDER BY p.post_modified DESC
-                ", $args);
-                $should_have_cpts = (array) $wpdb->get_results($sql);
+                $q = new WP_Query([
+                    'post_type' => ['post', 'page'],
+                    'post_status' => $args[5],
+                    'meta_query' => [
+                        'relation' => 'OR',
+                        [
+                            'key' => $args[0],
+                            'value' => '',
+                            'compare' => '!='
+                        ],
+                        [
+                            'key' => $args[1],
+                            'value' => '',
+                            'compare' => '!='
+                        ]
+                    ],
+                    'orderby' => 'modified',
+                    'order' => 'DESC',
+                    'no_found_rows' => true,
+                    'suppress_filters' => true,
+                ]);
+                $should_have_cpts = [];
+                foreach ($q->posts as $post) {
+                    $work_title = get_post_meta($post->ID, $args[0], true);
+                    $work_content = get_post_meta($post->ID, $args[1], true);
+                    if ($work_title || $work_content) {
+                        $cpt_q = new WP_Query([
+                            'post_type' => $args[3],
+                            'post_status' => $args[4],
+                            'meta_query' => [[
+                                'key' => $args[2],
+                                'value' => $post->ID,
+                                'compare' => '='
+                            ]],
+                            'fields' => 'ids',
+                            'no_found_rows' => true,
+                            'suppress_filters' => true,
+                        ]);
+                        if (empty($cpt_q->posts)) {
+                            $should_have_cpts[] = (object)[
+                                'ID' => $post->ID,
+                                'post_title' => $post->post_title,
+                                'work_title' => $work_title,
+                                'work_content' => $work_content
+                            ];
+                        }
+                    }
+                }
                 wp_cache_set($cache_key, $should_have_cpts, 'ofwn', 300);
             }
             $debug_info['missing_cpts'] = $should_have_cpts;
@@ -908,30 +1025,57 @@ class OFWN_Worklog_Settings {
             if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
                 $missing_posts = $cached;
             } else {
-                $sql = $wpdb->prepare("
-                    SELECT 
-                        p.ID,
-                        p.post_title,
-                        pm1.meta_value as work_title,
-                        pm2.meta_value as work_content,
-                        pm3.meta_value as requester,
-                        pm4.meta_value as worker,
-                        pm5.meta_value as target_label
-                    FROM {$wpdb->posts} p
-                    LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = %s
-                    LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = %s
-                    LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = %s AND cpt.post_status = %s
-                    WHERE p.post_type IN ('post', 'page') 
-                    AND p.post_status = %s
-                    AND (pm1.meta_value != '' OR pm2.meta_value != '')
-                    AND cpt.ID IS NULL
-                    ORDER BY p.post_modified DESC
-                ", $args);
-                $missing_posts = (array) $wpdb->get_results($sql);
+                $q = new WP_Query([
+                    'post_type' => ['post', 'page'],
+                    'post_status' => $args[8],
+                    'meta_query' => [
+                        'relation' => 'OR',
+                        [
+                            'key' => $args[0],
+                            'value' => '',
+                            'compare' => '!='
+                        ],
+                        [
+                            'key' => $args[1],
+                            'value' => '',
+                            'compare' => '!='
+                        ]
+                    ],
+                    'orderby' => 'modified',
+                    'order' => 'DESC',
+                    'no_found_rows' => true,
+                    'suppress_filters' => true,
+                ]);
+                $missing_posts = [];
+                foreach ($q->posts as $post) {
+                    $work_title = get_post_meta($post->ID, $args[0], true);
+                    $work_content = get_post_meta($post->ID, $args[1], true);
+                    if ($work_title || $work_content) {
+                        $cpt_q = new WP_Query([
+                            'post_type' => $args[6],
+                            'post_status' => $args[7],
+                            'meta_query' => [[
+                                'key' => $args[5],
+                                'value' => $post->ID,
+                                'compare' => '='
+                            ]],
+                            'fields' => 'ids',
+                            'no_found_rows' => true,
+                            'suppress_filters' => true,
+                        ]);
+                        if (empty($cpt_q->posts)) {
+                            $missing_posts[] = (object)[
+                                'ID' => $post->ID,
+                                'post_title' => $post->post_title,
+                                'work_title' => $work_title,
+                                'work_content' => $work_content,
+                                'requester' => get_post_meta($post->ID, $args[2], true),
+                                'worker' => get_post_meta($post->ID, $args[3], true),
+                                'target_label' => get_post_meta($post->ID, $args[4], true)
+                            ];
+                        }
+                    }
+                }
                 wp_cache_set($cache_key, $missing_posts, 'ofwn', 300);
             }
             
