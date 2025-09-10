@@ -180,21 +180,25 @@ class OFWN_List_Table extends WP_List_Table {
         // Plugin Check対策: meta_query に compare/type を明示
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
         if (!empty($_GET['status'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
             $status_filter = sanitize_key( wp_unslash( $_GET['status'] ) );
             $meta_query[] = ['key'=>'_ofwn_status','value'=>$status_filter,'compare'=>'=','type'=>'CHAR'];
         }
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
         if (!empty($_GET['requester'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
             $requester_filter = sanitize_text_field( wp_unslash( $_GET['requester'] ) );
             $meta_query[] = ['key'=>'_ofwn_requester','value'=>$requester_filter,'compare'=>'=','type'=>'CHAR'];
         }
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
         if (!empty($_GET['worker'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
             $worker_filter = sanitize_text_field( wp_unslash( $_GET['worker'] ) );
             $meta_query[] = ['key'=>'_ofwn_worker','value'=>$worker_filter,'compare'=>'=','type'=>'CHAR'];
         }
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
         if (!empty($_GET['target_type'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only filter/sort; no state change
             $target_type_filter = sanitize_key( wp_unslash( $_GET['target_type'] ) );
             $meta_query[] = ['key'=>'_ofwn_target_type','value'=>$target_type_filter,'compare'=>'=','type'=>'CHAR'];
         }
