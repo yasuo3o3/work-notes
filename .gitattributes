@@ -27,4 +27,4 @@
 /composer.* export-ignore
 
 /.distignore export-ignore
-/.LICENSE export-ignore
+/LICENSE export-ignore
