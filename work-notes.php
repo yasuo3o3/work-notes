@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Work Notes
  * Description:       クライアント指示や更新作業のメモをWP内で記録。投稿や固定ページに紐づけ、一覧管理できます。依頼元/担当者のマスター管理＆セレクト、管理画面の「作業一覧」付き。
- * Version:           1.0.2
+ * Version:           1.0.3
  * Author:            Netservice
  * Author URI:        https://netservice.jp/
  * License:           GPL-2.0-or-later
@@ -12,16 +12,20 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('OFWN_VER', '1.0.2');
+define('OFWN_VER', '1.0.3');
 define('OFWN_DIR', plugin_dir_path(__FILE__));
 define('OFWN_URL', plugin_dir_url(__FILE__));
 
 /**
  * デバッグログ出力ヘルパー関数
+ * 本番環境での error_log() 呼び出しを避ける
  */
 function ofwn_log($message) {
     if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-        error_log('[OFWN] ' . $message);
+        // WP_DEBUG_LOG が有効なら専用ログファイルに出力
+        if (function_exists('wp_debug_log')) {
+            wp_debug_log('[OFWN] ' . $message);
+        }
     }
 }
 

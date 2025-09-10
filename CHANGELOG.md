@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and uses Semantic Versioning.
 
 ## [Unreleased]
+
+## [1.0.3] - 2025-01-09
+### Changed
+- プラグインチェッカー対応のためのバージョン更新
 ### Added
 - 投稿・固定ページのGutenbergエディタで公開ステータス直下に「作業メモ」UIを配置
 - PluginPostStatusInfo を使用した作業メモ入力パネル

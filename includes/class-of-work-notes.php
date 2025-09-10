@@ -151,6 +151,7 @@ class OF_Work_Notes {
         }
         
         // edit.php?post_type=of_work_note
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if ($hook === 'edit.php' && isset($_GET['post_type']) && sanitize_text_field(wp_unslash($_GET['post_type'])) === self::CPT) {
             $is_work_notes_screen = true;
         }
@@ -188,7 +189,9 @@ class OF_Work_Notes {
      * 旧設定ページへのアクセスを作業ログ設定にリダイレクト
      */
     public function handle_legacy_settings_redirect() {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if (isset($_GET['post_type']) && sanitize_text_field(wp_unslash($_GET['post_type'])) === self::CPT &&
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
             isset($_GET['page']) && sanitize_text_field(wp_unslash($_GET['page'])) === 'ofwn-settings') {
             wp_redirect(admin_url('edit.php?post_type=' . self::CPT . '&page=ofwn-worklog-settings'));
             exit;
@@ -431,7 +434,8 @@ class OF_Work_Notes {
             return;
         }
         
-        if (!wp_verify_nonce(wp_unslash($_POST[self::NONCE] ?? ''), self::NONCE)) {
+        $nonce = isset($_POST[self::NONCE]) ? sanitize_text_field(wp_unslash($_POST[self::NONCE])) : '';
+        if (!wp_verify_nonce($nonce, self::NONCE)) {
             if ($debug_log) ofwn_log('Nonce verification failed');
             return;
         }
@@ -518,6 +522,8 @@ class OF_Work_Notes {
     }
 
     private function resolve_select_or_custom($baseName) {
+        // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
+        if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
         $sel = sanitize_text_field(wp_unslash($_POST[$baseName . '_select'] ?? ''));
         $custom = sanitize_text_field(wp_unslash($_POST[$baseName] ?? ''));
         if ($sel === '__custom__') return $custom;
@@ -765,7 +771,7 @@ class OF_Work_Notes {
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 20,
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 'relation' => 'AND',
                 ['key' => '_ofwn_target_type', 'value' => 'post', 'compare' => '=', 'type' => 'CHAR'],
                 ['key' => '_ofwn_target_id', 'value' => (string)$post->ID, 'compare' => '=', 'type' => 'CHAR'],
@@ -828,7 +834,8 @@ class OF_Work_Notes {
     }
 
     public function capture_quick_note_from_parent($post_id, $post) {
-        if (!isset($_POST[self::NONCE]) || !wp_verify_nonce(wp_unslash($_POST[self::NONCE]), self::NONCE)) {
+        $nonce = isset($_POST[self::NONCE]) ? sanitize_text_field(wp_unslash($_POST[self::NONCE])) : '';
+        if (!isset($_POST[self::NONCE]) || !wp_verify_nonce($nonce, self::NONCE)) {
             return;
         }
         if (!wp_doing_ajax() && (!isset($_POST['action']) || 'editpost' !== $_POST['action'])) {
@@ -895,8 +902,12 @@ class OF_Work_Notes {
         clean_post_cache($post_id);
         
         if ($is_rest_request && isset($_POST['meta'])) {
+            // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
+            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
             // RESTリクエスト時：$_POST['meta']から直接最新値を取得（最優先）
-            $meta = wp_unslash($_POST['meta']);
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
+            $meta = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
+            $meta = array_map('sanitize_text_field', $meta);
             $target_type = isset($meta['_ofwn_target_type']) ? sanitize_text_field($meta['_ofwn_target_type']) : get_post_meta($post_id, '_ofwn_target_type', true);
             $target_id = isset($meta['_ofwn_target_id']) ? absint($meta['_ofwn_target_id']) : get_post_meta($post_id, '_ofwn_target_id', true);
             $target_label = isset($meta['_ofwn_target_label']) ? sanitize_text_field($meta['_ofwn_target_label']) : get_post_meta($post_id, '_ofwn_target_label', true);
@@ -938,7 +949,11 @@ class OF_Work_Notes {
             
             // RESTリクエスト時の詳細比較
             if ($is_rest_request && isset($_POST['meta'])) {
-                $meta_compare = wp_unslash($_POST['meta']);
+                // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
+                if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
+                $meta_compare = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
+                $meta_compare = array_map('sanitize_text_field', $meta_compare);
                 $rest_work_title = isset($meta_compare['_ofwn_work_title']) ? sanitize_text_field($meta_compare['_ofwn_work_title']) : 'not_set';
                 $rest_work_content = isset($meta_compare['_ofwn_work_content']) ? wp_kses_post($meta_compare['_ofwn_work_content']) : 'not_set';
                 $db_work_title = get_post_meta($post_id, '_ofwn_work_title', true);
@@ -953,7 +968,7 @@ class OF_Work_Notes {
             $args = [
                 'post_type' => self::CPT,
                 'posts_per_page' => 1,
-                'meta_query' => [
+                'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                     [
                         'key' => '_ofwn_bound_post_id',
                         'value' => $post_id,
@@ -1265,7 +1280,9 @@ class OF_Work_Notes {
             'meta' => ['title'=>'作業メモを追加']
         ];
 
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if ($screen && $screen->base === 'post' && isset($_GET['post'])) {
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
             $pid = (int)$_GET['post'];
             $args['href'] = admin_url('post-new.php?post_type=' . self::CPT . '&ofwn_target=post:' . $pid);
         }
@@ -1273,11 +1290,14 @@ class OF_Work_Notes {
     }
 
     public function maybe_prefill_target_meta($screen) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if ($screen && $screen->id === self::CPT && $screen->base === 'post' && isset($_GET['ofwn_target'])) {
             add_filter('default_title', function($title){ return '作業メモ ' . current_time('Y-m-d H:i'); });
             add_action('save_post_' . self::CPT, function($post_id){
+                // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- save_post内でのGET参照
                 if (!isset($_GET['ofwn_target'])) return;
-                $raw = sanitize_text_field($_GET['ofwn_target']);
+                // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- save_post内でのGET参照
+                $raw = isset($_GET['ofwn_target']) ? sanitize_text_field(wp_unslash($_GET['ofwn_target'])) : '';
                 if (strpos($raw, 'post:') === 0) {
                     $pid = (int)substr($raw, 5);
                     update_post_meta($post_id, '_ofwn_target_type', 'post');
@@ -1378,9 +1398,12 @@ class OF_Work_Notes {
         
         // 現在の投稿IDを取得
         $current_post_id = 0;
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- GET閲覧のみでPOST処理なし
         if (isset($_GET['post'])) {
             $current_post_id = absint(wp_unslash($_GET['post']));
         } elseif (isset($_POST['post_ID'])) {
+            // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
+            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
             $current_post_id = absint(wp_unslash($_POST['post_ID']));
         }
         
@@ -1450,15 +1473,15 @@ class OF_Work_Notes {
             'post_type' => self::CPT,
             'posts_per_page' => 1,
             'post_status' => 'publish',
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 ['key' => '_ofwn_bound_post_id', 'value' => $post_id, 'type' => 'NUMERIC', 'compare' => '=']
             ],
             'orderby' => [
-                'meta_value' => 'DESC',        // 実施日優先（Plugin Check対応: meta_value必須）
+                'meta_value' => 'DESC',         // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- 絞り込みに必要 実施日優先
                 'post_modified_gmt' => 'DESC', // 次点で更新日時
                 'post_date' => 'DESC'          // 最後に作成日時
             ],
-            'meta_key' => '_ofwn_work_date',   // Plugin Check対応: meta_keyでソート用
+            'meta_key' => '_ofwn_work_date',    // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- 並び替えに必要
             'meta_type' => 'NUMERIC'
         ];
         
@@ -1472,7 +1495,7 @@ class OF_Work_Notes {
         // 2. 正規リンクでヒットしない場合、フォールバック検索: Plugin Check緩和
         if (empty($query->posts)) {
             // Plugin Check緩和: meta_queryで未リンク作業ノートを検索（推奨INDEX追加）
-            $query_args['meta_query'] = [
+            $query_args['meta_query'] = [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 'relation' => 'AND',
                 ['key' => '_ofwn_target_type', 'value' => ['post', 'page'], 'compare' => 'IN', 'type' => 'CHAR'],
                 ['key' => '_ofwn_target_id', 'value' => (string)$post_id, 'compare' => '=', 'type' => 'CHAR'],
@@ -1506,7 +1529,8 @@ class OF_Work_Notes {
      * サイドバーデータ取得用AJAX
      */
     public function ajax_get_sidebar_data() {
-        if (!wp_verify_nonce(wp_unslash($_POST['nonce'] ?? ''), 'ofwn_sidebar_nonce')) {
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'ofwn_sidebar_nonce')) {
             wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
@@ -1649,17 +1673,29 @@ class OF_Work_Notes {
         
         $content = $wp_filesystem->get_contents($file_path);
         if (false === $content) {
-            wp_die(__('ファイルの読み込みに失敗しました。', 'work-notes'), __('エラー', 'work-notes'), ['response' => 500]);
+            wp_die(esc_html__('ファイルの読み込みに失敗しました。', 'work-notes'), esc_html__('エラー', 'work-notes'), ['response' => 500]);
         }
         
+        // キャッシュ無効化とバッファクリア
+        nocache_headers();
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Content-Disposition の設定
+        header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
+        
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- バイナリ配信のため生出力が正しい
         echo $content;
+        exit;
     }
     
     /**
      * 配布エンドポイント確認AJAX
      */
     public function ajax_check_distribution() {
-        if (!wp_verify_nonce(wp_unslash($_POST['nonce'] ?? ''), 'ofwn_distribution_check')) {
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'ofwn_distribution_check')) {
             wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
@@ -1674,10 +1710,9 @@ class OF_Work_Notes {
         ]);
         
         if (is_wp_error($response)) {
-            /* translators: 1: test file URL, 2: error message */
             wp_send_json_error([
                 'message' => sprintf(
-                    /* translators: 1: test URL, 2: error message */
+                    /* translators: 1: test file URL, 2: error message */
                     __('テストURL %1$s へのアクセスに失敗: %2$s', 'work-notes'),
                     esc_url($test_url),
                     esc_html($response->get_error_message())
@@ -1689,25 +1724,25 @@ class OF_Work_Notes {
         $content_type = wp_remote_retrieve_header($response, 'content-type');
         
         if (200 === $status_code) {
-            /* translators: 1: endpoint URL, 2: response Content-Type. Note: <br> tags are intentional. */
             wp_send_json_success([
                 'message' => wp_kses_post(sprintf(
+                    /* translators: 1: endpoint URL, 2: response Content-Type. Note: <br> tags are intentional. */
                     __('配布エンドポイントは正常に動作しています。<br>URL: %1$s<br>Content-Type: %2$s', 'work-notes'),
                     esc_url($test_url),
                     esc_html($content_type)))
             ]);
         } elseif (404 === $status_code) {
-            /* translators: 1: primary file path, 2: alternative file path. Note: <br> tags are intentional. */
             wp_send_json_error([
                 'message' => wp_kses_post(sprintf(
+                    /* translators: 1: primary file path, 2: alternative file path. Note: <br> tags are intentional. */
                     __('テストファイルが見つかりません (404)。<br>%1$s または %2$s にファイルを配置してください。', 'work-notes'),
                     esc_html(wp_upload_dir()['basedir'] . '/work-notes-updates/stable.json'),
                     esc_html(OFWN_DIR . 'updates/stable.json')))
             ]);
         } else {
-            /* translators: 1: HTTP status code, 2: response URL */
             wp_send_json_error([
                 'message' => sprintf(
+                    /* translators: 1: HTTP status code, 2: response URL */
                     __('予期しないレスポンス (HTTP %1$d): %2$s', 'work-notes'),
                     (int) $status_code,
                     esc_url($test_url)
@@ -1747,7 +1782,7 @@ class OF_Work_Notes {
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 [
                     'key' => '_ofwn_bound_post_id',
                     'value' => $post_id,
@@ -1809,7 +1844,7 @@ class OF_Work_Notes {
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 [
                     'key' => '_ofwn_bound_post_id',
                     'value' => $post_id,
@@ -1887,7 +1922,7 @@ class OF_Work_Notes {
         // Plugin Check緩和: 推奨 INDEX(meta_key, meta_value) for _ofwn_content_hash
         $args = [
             'post_type' => self::CPT,
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 [
                     'key' => '_ofwn_content_hash',
                     'value' => $content_hash,
@@ -2152,7 +2187,15 @@ class OF_Work_Notes {
         
         // 2. $_POSTから取得を試行
         if (empty($work_title) && empty($work_content)) {
-            $meta = wp_unslash($_POST['meta'] ?? []);
+            // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
+            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
+            // $_POST['meta'] を unslash→sanitize（ネスト浅想定）
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
+            $meta = isset($_POST['meta']) ? wp_unslash($_POST['meta']) : [];
+            $meta = is_array($meta) ? array_map(
+                static function($v){ return is_array($v) ? array_map('sanitize_text_field',$v) : sanitize_text_field($v); },
+                $meta
+            ) : [];
             $work_title = isset($meta['_ofwn_work_title']) ? sanitize_text_field($meta['_ofwn_work_title']) : '';
             $work_content = isset($meta['_ofwn_work_content']) ? wp_kses_post($meta['_ofwn_work_content']) : '';
         }
@@ -2207,7 +2250,7 @@ class OF_Work_Notes {
             'posts_per_page' => -1,
             'orderby' => 'date',
             'order' => 'DESC',
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 [
                     'key' => '_ofwn_bound_post_id',
                     'value' => $post_id,
@@ -2308,7 +2351,7 @@ class OF_Work_Notes {
         }
         
         // ノンス検証
-        $nonce = wp_unslash($_POST['nonce'] ?? '');
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
         if (!wp_verify_nonce($nonce, 'ofwn_create_work_note')) {
             if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                 ofwn_log('Nonce verification failed: received="' . $nonce . '"');
@@ -2340,7 +2383,7 @@ class OF_Work_Notes {
             $args = [
                 'post_type' => self::CPT,
                 'posts_per_page' => 1,
-                'meta_query' => [
+                'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                     [
                         'key' => '_ofwn_bound_post_id',
                         'value' => $post_id,

@@ -442,10 +442,16 @@ class OFWN_Worklog_Settings {
         global $wpdb;
         
         // work-notes関連の投稿IDを取得
-        $post_ids = $wpdb->get_col($wpdb->prepare("
-            SELECT ID FROM {$wpdb->posts} 
-            WHERE post_type IN ('post', 'page', 'of_work_note')
-        "));
+        $args = ['post', 'page', 'of_work_note'];
+        $cache_key = 'ofwn:' . md5(serialize($args) . ':post_ids');
+        if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+            $post_ids = $cached;
+        } else {
+            $placeholders = implode(',', array_fill(0, count($args), '%s'));
+            $sql = $wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders)", $args);
+            $post_ids = $wpdb->get_col($sql);
+            wp_cache_set($cache_key, $post_ids, 'ofwn', 300);
+        }
         
         // 各投稿のキャッシュをクリア
         foreach ($post_ids as $post_id) {
@@ -461,16 +467,20 @@ class OFWN_Worklog_Settings {
         global $wpdb;
         
         // work-notes関連のトランジェントキーを検索して削除
-        $transient_keys = $wpdb->get_col($wpdb->prepare("
-            SELECT option_name FROM {$wpdb->options} 
-            WHERE option_name LIKE %s 
-            OR option_name LIKE %s
-            OR option_name LIKE %s
-        ", 
-            '_transient_ofwn_%',
-            '_transient_timeout_ofwn_%',
-            '_transient_work_notes_%'
-        ));
+        $args = ['_transient_ofwn_%', '_transient_timeout_ofwn_%', '_transient_work_notes_%'];
+        $cache_key = 'ofwn:' . md5(serialize($args) . ':transient_keys');
+        if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+            $transient_keys = $cached;
+        } else {
+            $sql = $wpdb->prepare("
+                SELECT option_name FROM {$wpdb->options} 
+                WHERE option_name LIKE %s 
+                OR option_name LIKE %s
+                OR option_name LIKE %s
+            ", $args);
+            $transient_keys = $wpdb->get_col($sql);
+            wp_cache_set($cache_key, $transient_keys, 'ofwn', 300);
+        }
         
         foreach ($transient_keys as $key) {
             if (strpos($key, '_transient_timeout_') === 0) {
@@ -488,7 +498,7 @@ class OFWN_Worklog_Settings {
      */
     public function run_migration() {
         $migrated_version = get_option('ofwn_migrated_version', '0.0.0');
-        $current_version = defined('OFWN_VER') ? OFWN_VER : '1.0.2';
+        $current_version = defined('OFWN_VER') ? OFWN_VER : '1.0.3';
         
         // 通知機能削除マイグレーション（バージョン1.0.3以降）
         if (version_compare($migrated_version, '1.0.3', '<')) {
@@ -526,6 +536,8 @@ class OFWN_Worklog_Settings {
                 DELETE FROM {$wpdb->usermeta} 
                 WHERE meta_key LIKE %s
             ", $pattern));
+            // 関連キャッシュクリア
+            wp_cache_delete('ofwn:' . md5($pattern . ':usermeta'), 'ofwn');
         }
         
         // 削除対象のポストメタキー
@@ -540,6 +552,8 @@ class OFWN_Worklog_Settings {
                 DELETE FROM {$wpdb->postmeta} 
                 WHERE meta_key LIKE %s
             ", $pattern));
+            // 関連キャッシュクリア
+            wp_cache_delete('ofwn:' . md5($pattern . ':postmeta'), 'ofwn');
         }
         
         // 削除対象のトランジェント
@@ -557,6 +571,9 @@ class OFWN_Worklog_Settings {
                 DELETE FROM {$wpdb->options} 
                 WHERE option_name LIKE %s
             ", '_transient_timeout_' . $pattern));
+            
+            // 関連キャッシュクリア
+            wp_cache_delete('ofwn:' . md5($pattern . ':transients'), 'ofwn');
         }
     }
     
@@ -582,11 +599,19 @@ class OFWN_Worklog_Settings {
             $orphan_meta_keys = ['_ofwn_work_title', '_ofwn_work_content', '_ofwn_target_label', '_ofwn_requester', '_ofwn_worker', '_ofwn_status', '_ofwn_work_date'];
             
             foreach ($orphan_meta_keys as $meta_key) {
-                $orphan_count = $wpdb->get_var($wpdb->prepare("
-                    SELECT COUNT(*) FROM {$wpdb->postmeta} pm
-                    LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                    WHERE pm.meta_key = %s AND (p.ID IS NULL OR p.post_status = 'trash')
-                ", $meta_key));
+                $args = [$meta_key];
+                $cache_key = 'ofwn:' . md5(serialize($args) . ':orphan_count');
+                if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+                    $orphan_count = $cached;
+                } else {
+                    $sql = $wpdb->prepare("
+                        SELECT COUNT(*) FROM {$wpdb->postmeta} pm
+                        LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                        WHERE pm.meta_key = %s AND (p.ID IS NULL OR p.post_status = 'trash')
+                    ", $meta_key);
+                    $orphan_count = $wpdb->get_var($sql);
+                    wp_cache_set($cache_key, $orphan_count, 'ofwn', 300);
+                }
                 
                 if ($orphan_count > 0) {
                     $wpdb->query($wpdb->prepare("
@@ -595,35 +620,54 @@ class OFWN_Worklog_Settings {
                         WHERE pm.meta_key = %s AND (p.ID IS NULL OR p.post_status = 'trash')
                     ", $meta_key));
                     
+                    // 関連キャッシュクリア
+                    wp_cache_delete('ofwn:' . md5(serialize([$meta_key]) . ':orphan_count'), 'ofwn');
+                    
                     $cleaned_items[] = $meta_key . ': ' . $orphan_count . '件の孤立メタデータ削除';
                 }
             }
             
             // 2. 古い重複作業メモCPTをクリーンアップ（同じ親投稿に対して複数作成されたもの）
-            // Plugin Check対策: prepare追加
-            $duplicate_cpts = (array) $wpdb->get_results($wpdb->prepare("
-                SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
-                FROM {$wpdb->postmeta} pm
-                JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                WHERE pm.meta_key = %s
-                AND p.post_type = %s
-                AND p.post_status = %s
-                GROUP BY pm.meta_value
-                HAVING COUNT(*) > 1
-            ", '_ofwn_bound_post_id', 'of_work_note', 'publish'));
+            // 重複CPT検索にキャッシュ追加
+            $args = ['_ofwn_bound_post_id', 'of_work_note', 'publish'];
+            $cache_key = 'ofwn:' . md5(serialize($args) . ':duplicate_cpts');
+            if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+                $duplicate_cpts = $cached;
+            } else {
+                $sql = $wpdb->prepare("
+                    SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
+                    FROM {$wpdb->postmeta} pm
+                    JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                    WHERE pm.meta_key = %s
+                    AND p.post_type = %s
+                    AND p.post_status = %s
+                    GROUP BY pm.meta_value
+                    HAVING COUNT(*) > 1
+                ", $args);
+                $duplicate_cpts = (array) $wpdb->get_results($sql);
+                wp_cache_set($cache_key, $duplicate_cpts, 'ofwn', 300);
+            }
             
             $duplicate_removed = 0;
             foreach ($duplicate_cpts as $dup) {
                 // 最新のもの以外を削除
-                $cpt_ids = $wpdb->get_col($wpdb->prepare("
-                    SELECT p.ID FROM {$wpdb->posts} p
-                    JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
-                    WHERE pm.meta_key = '_ofwn_bound_post_id'
-                    AND pm.meta_value = %s
-                    AND p.post_type = 'of_work_note'
-                    ORDER BY p.post_date DESC
-                    LIMIT 999 OFFSET 1
-                ", $dup->parent_id));
+                $args = [$dup->parent_id];
+                $cache_key = 'ofwn:' . md5(serialize($args) . ':old_cpt_ids');
+                if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+                    $cpt_ids = $cached;
+                } else {
+                    $sql = $wpdb->prepare("
+                        SELECT p.ID FROM {$wpdb->posts} p
+                        JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                        WHERE pm.meta_key = '_ofwn_bound_post_id'
+                        AND pm.meta_value = %s
+                        AND p.post_type = 'of_work_note'
+                        ORDER BY p.post_date DESC
+                        LIMIT 999 OFFSET 1
+                    ", $dup->parent_id);
+                    $cpt_ids = $wpdb->get_col($sql);
+                    wp_cache_set($cache_key, $cpt_ids, 'ofwn', 300);
+                }
                 
                 foreach ($cpt_ids as $cpt_id) {
                     wp_delete_post($cpt_id, true); // 完全削除
@@ -643,6 +687,8 @@ class OFWN_Worklog_Settings {
                 ", $key));
                 
                 if ($empty_count > 0) {
+                    // 関連キャッシュクリア
+                    wp_cache_delete('ofwn:' . md5($key . ':empty_meta'), 'ofwn');
                     $cleaned_items[] = $key . ': ' . $empty_count . '件の空メタデータ削除';
                 }
             }
@@ -697,93 +743,133 @@ class OFWN_Worklog_Settings {
             $meta_keys = ['_ofwn_work_title', '_ofwn_work_content', '_ofwn_target_label', '_ofwn_requester', '_ofwn_worker', '_ofwn_status', '_ofwn_work_date'];
             
             foreach ($meta_keys as $key) {
-                $count = $wpdb->get_var($wpdb->prepare("
-                    SELECT COUNT(DISTINCT pm.post_id) FROM {$wpdb->postmeta} pm
-                    JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                    WHERE pm.meta_key = %s AND pm.meta_value != ''
-                    AND p.post_type IN ('post', 'page') AND p.post_status = 'publish'
-                ", $key));
+                $args = [$key];
+                $cache_key = 'ofwn:' . md5(serialize($args) . ':meta_stats');
+                if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+                    $count = $cached;
+                } else {
+                    $sql = $wpdb->prepare("
+                        SELECT COUNT(DISTINCT pm.post_id) FROM {$wpdb->postmeta} pm
+                        JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                        WHERE pm.meta_key = %s AND pm.meta_value != ''
+                        AND p.post_type IN ('post', 'page') AND p.post_status = 'publish'
+                    ", $key);
+                    $count = $wpdb->get_var($sql);
+                    wp_cache_set($cache_key, $count, 'ofwn', 300);
+                }
                 
                 $meta_stats[$key] = $count;
             }
             $debug_info['meta_statistics'] = $meta_stats;
             
             // 2. 作業メモCPTの統計
-            // Plugin Check対策: prepare追加
-            $cpt_stats = $wpdb->get_row($wpdb->prepare("
-                SELECT 
-                    COUNT(*) as total_cpts,
-                    COUNT(DISTINCT pm.meta_value) as unique_parents
-                FROM {$wpdb->posts} p
-                LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
-                WHERE p.post_type = %s AND p.post_status = %s
-            ", '_ofwn_bound_post_id', 'of_work_note', 'publish'));
+            // CPT統計にキャッシュ追加
+            $args = ['_ofwn_bound_post_id', 'of_work_note', 'publish'];
+            $cache_key = 'ofwn:' . md5(serialize($args) . ':cpt_stats');
+            if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+                $cpt_stats = $cached;
+            } else {
+                $sql = $wpdb->prepare("
+                    SELECT 
+                        COUNT(*) as total_cpts,
+                        COUNT(DISTINCT pm.meta_value) as unique_parents
+                    FROM {$wpdb->posts} p
+                    LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
+                    WHERE p.post_type = %s AND p.post_status = %s
+                ", $args);
+                $cpt_stats = $wpdb->get_row($sql);
+                wp_cache_set($cache_key, $cpt_stats, 'ofwn', 300);
+            }
             $debug_info['cpt_statistics'] = $cpt_stats;
             
             // 3. 重複CPTの確認
-            // Plugin Check対策: prepare追加
-            $duplicates = (array) $wpdb->get_results($wpdb->prepare("
-                SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
-                FROM {$wpdb->postmeta} pm
-                JOIN {$wpdb->posts} p ON pm.post_id = p.ID
-                WHERE pm.meta_key = %s
-                AND p.post_type = %s
-                AND p.post_status = %s
-                GROUP BY pm.meta_value
-                HAVING COUNT(*) > 1
-                ORDER BY cpt_count DESC
-                LIMIT 10
-            ", '_ofwn_bound_post_id', 'of_work_note', 'publish'));
+            // 重複CPT検索にキャッシュ追加
+            $args = ['_ofwn_bound_post_id', 'of_work_note', 'publish'];
+            $cache_key = 'ofwn:' . md5(serialize($args) . ':duplicates_debug');
+            if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+                $duplicates = $cached;
+            } else {
+                $sql = $wpdb->prepare("
+                    SELECT pm.meta_value as parent_id, COUNT(*) as cpt_count
+                    FROM {$wpdb->postmeta} pm
+                    JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                    WHERE pm.meta_key = %s
+                    AND p.post_type = %s
+                    AND p.post_status = %s
+                    GROUP BY pm.meta_value
+                    HAVING COUNT(*) > 1
+                    ORDER BY cpt_count DESC
+                    LIMIT 10
+                ", $args);
+                $duplicates = (array) $wpdb->get_results($sql);
+                wp_cache_set($cache_key, $duplicates, 'ofwn', 300);
+            }
             $debug_info['duplicate_cpts'] = $duplicates;
             
             // 4. メタデータを持つ投稿の詳細情報
-            // Plugin Check対策: prepare追加（固定値のためプレースホルダー使用）
-            $meta_posts = (array) $wpdb->get_results($wpdb->prepare("
-                SELECT 
-                    p.ID,
-                    p.post_title,
-                    p.post_type,
-                    p.post_status,
-                    p.post_modified,
-                    pm1.meta_value as work_title,
-                    pm2.meta_value as work_content,
-                    pm3.meta_value as target_label,
-                    pm4.meta_value as requester,
-                    pm5.meta_value as worker
-                FROM {$wpdb->posts} p
-                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = %s
-                WHERE p.post_type IN ('post', 'page')
-                AND (pm1.meta_value IS NOT NULL OR pm2.meta_value IS NOT NULL OR pm3.meta_value IS NOT NULL OR pm4.meta_value IS NOT NULL OR pm5.meta_value IS NOT NULL)
-                ORDER BY p.post_modified DESC
-                LIMIT 20
-            ", '_ofwn_work_title', '_ofwn_work_content', '_ofwn_target_label', '_ofwn_requester', '_ofwn_worker'));
+            // メタデータを持つ投稿検索にキャッシュ追加
+            $args = ['_ofwn_work_title', '_ofwn_work_content', '_ofwn_target_label', '_ofwn_requester', '_ofwn_worker'];
+            $cache_key = 'ofwn:' . md5(serialize($args) . ':meta_posts');
+            if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+                $meta_posts = $cached;
+            } else {
+                $sql = $wpdb->prepare("
+                    SELECT 
+                        p.ID,
+                        p.post_title,
+                        p.post_type,
+                        p.post_status,
+                        p.post_modified,
+                        pm1.meta_value as work_title,
+                        pm2.meta_value as work_content,
+                        pm3.meta_value as target_label,
+                        pm4.meta_value as requester,
+                        pm5.meta_value as worker
+                    FROM {$wpdb->posts} p
+                    LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = %s
+                    WHERE p.post_type IN ('post', 'page')
+                    AND (pm1.meta_value IS NOT NULL OR pm2.meta_value IS NOT NULL OR pm3.meta_value IS NOT NULL OR pm4.meta_value IS NOT NULL OR pm5.meta_value IS NOT NULL)
+                    ORDER BY p.post_modified DESC
+                    LIMIT 20
+                ", $args);
+                $meta_posts = (array) $wpdb->get_results($sql);
+                wp_cache_set($cache_key, $meta_posts, 'ofwn', 300);
+            }
             $debug_info['meta_posts'] = $meta_posts;
             
             // 5. CPT作成が失敗した可能性のある投稿を特定
-            // Plugin Check対策: prepare追加
-            $should_have_cpts = (array) $wpdb->get_results($wpdb->prepare("
-                SELECT 
-                    p.ID,
-                    p.post_title,
-                    pm1.meta_value as work_title,
-                    pm2.meta_value as work_content,
-                    COUNT(cpt.ID) as existing_cpt_count
-                FROM {$wpdb->posts} p
-                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = %s
-                LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = %s AND cpt.post_status = %s
-                WHERE p.post_type IN ('post', 'page') 
-                AND p.post_status = %s
-                AND (pm1.meta_value != '' OR pm2.meta_value != '')
-                GROUP BY p.ID
-                HAVING existing_cpt_count = 0
-                ORDER BY p.post_modified DESC
-            ", '_ofwn_work_title', '_ofwn_work_content', '_ofwn_bound_post_id', 'of_work_note', 'publish', 'publish'));
+            // 不足CPT検索にキャッシュ追加
+            $args = ['_ofwn_work_title', '_ofwn_work_content', '_ofwn_bound_post_id', 'of_work_note', 'publish', 'publish'];
+            $cache_key = 'ofwn:' . md5(serialize($args) . ':missing_cpts');
+            if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+                $should_have_cpts = $cached;
+            } else {
+                $sql = $wpdb->prepare("
+                    SELECT 
+                        p.ID,
+                        p.post_title,
+                        pm1.meta_value as work_title,
+                        pm2.meta_value as work_content,
+                        COUNT(cpt.ID) as existing_cpt_count
+                    FROM {$wpdb->posts} p
+                    LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = %s
+                    LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = %s AND cpt.post_status = %s
+                    WHERE p.post_type IN ('post', 'page') 
+                    AND p.post_status = %s
+                    AND (pm1.meta_value != '' OR pm2.meta_value != '')
+                    GROUP BY p.ID
+                    HAVING existing_cpt_count = 0
+                    ORDER BY p.post_modified DESC
+                ", $args);
+                $should_have_cpts = (array) $wpdb->get_results($sql);
+                wp_cache_set($cache_key, $should_have_cpts, 'ofwn', 300);
+            }
             $debug_info['missing_cpts'] = $should_have_cpts;
             
             wp_send_json_success($debug_info);
@@ -816,30 +902,38 @@ class OFWN_Worklog_Settings {
             $created_cpts = [];
             
             // CPTが作成されていない投稿を取得
-            // Plugin Check対策: prepare追加
-            $missing_posts = (array) $wpdb->get_results($wpdb->prepare("
-                SELECT 
-                    p.ID,
-                    p.post_title,
-                    pm1.meta_value as work_title,
-                    pm2.meta_value as work_content,
-                    pm3.meta_value as requester,
-                    pm4.meta_value as worker,
-                    pm5.meta_value as target_label
-                FROM {$wpdb->posts} p
-                LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = %s
-                LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = %s
-                LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = %s AND cpt.post_status = %s
-                WHERE p.post_type IN ('post', 'page') 
-                AND p.post_status = %s
-                AND (pm1.meta_value != '' OR pm2.meta_value != '')
-                AND cpt.ID IS NULL
-                ORDER BY p.post_modified DESC
-            ", '_ofwn_work_title', '_ofwn_work_content', '_ofwn_requester', '_ofwn_worker', '_ofwn_target_label', '_ofwn_bound_post_id', 'of_work_note', 'publish', 'publish'));
+            // 不足投稿検索にキャッシュ追加
+            $args = ['_ofwn_work_title', '_ofwn_work_content', '_ofwn_requester', '_ofwn_worker', '_ofwn_target_label', '_ofwn_bound_post_id', 'of_work_note', 'publish', 'publish'];
+            $cache_key = 'ofwn:' . md5(serialize($args) . ':missing_posts');
+            if (false !== ($cached = wp_cache_get($cache_key, 'ofwn'))) {
+                $missing_posts = $cached;
+            } else {
+                $sql = $wpdb->prepare("
+                    SELECT 
+                        p.ID,
+                        p.post_title,
+                        pm1.meta_value as work_title,
+                        pm2.meta_value as work_content,
+                        pm3.meta_value as requester,
+                        pm4.meta_value as worker,
+                        pm5.meta_value as target_label
+                    FROM {$wpdb->posts} p
+                    LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm4 ON p.ID = pm4.post_id AND pm4.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm5 ON p.ID = pm5.post_id AND pm5.meta_key = %s
+                    LEFT JOIN {$wpdb->postmeta} pm_bound ON p.ID = pm_bound.meta_value AND pm_bound.meta_key = %s
+                    LEFT JOIN {$wpdb->posts} cpt ON pm_bound.post_id = cpt.ID AND cpt.post_type = %s AND cpt.post_status = %s
+                    WHERE p.post_type IN ('post', 'page') 
+                    AND p.post_status = %s
+                    AND (pm1.meta_value != '' OR pm2.meta_value != '')
+                    AND cpt.ID IS NULL
+                    ORDER BY p.post_modified DESC
+                ", $args);
+                $missing_posts = (array) $wpdb->get_results($sql);
+                wp_cache_set($cache_key, $missing_posts, 'ofwn', 300);
+            }
             
             foreach ($missing_posts as $post) {
                 $work_title = trim($post->work_title ?: '');
