@@ -388,7 +388,8 @@ class OFWN_Worklog_Settings {
      */
     public function ajax_clear_cache() {
         // ノンス検証
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_clear_cache')) {
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+        if (!wp_verify_nonce($nonce, 'ofwn_clear_cache')) {
             wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
@@ -453,7 +454,7 @@ class OFWN_Worklog_Settings {
                 'fields' => 'ids',
                 'nopaging' => true,
                 'no_found_rows' => true,
-                'suppress_filters' => true,
+                // 'suppress_filters' => true, // VIP: 禁止のため無効化
             ]);
             $post_ids = $q->posts;
             wp_cache_set($cache_key, $post_ids, 'ofwn', 300);
@@ -582,7 +583,8 @@ class OFWN_Worklog_Settings {
      */
     public function ajax_cleanup_old_meta() {
         // ノンス検証
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_cleanup_old_meta')) {
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+        if (!wp_verify_nonce($nonce, 'ofwn_cleanup_old_meta')) {
             wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
@@ -607,14 +609,14 @@ class OFWN_Worklog_Settings {
                     $q = new WP_Query([
                         'post_type' => 'any',
                         'post_status' => 'any',
-                        'meta_query' => [[
+                        'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                             'key' => $meta_key,
                             'compare' => 'EXISTS'
                         ]],
                         'fields' => 'ids',
                         'nopaging' => true,
                         'no_found_rows' => true,
-                        'suppress_filters' => true,
+                        // 'suppress_filters' => true, // VIP: 禁止のため無効化
                     ]);
                     $all_posts_with_meta = $q->posts;
                     $orphan_count = 0;
@@ -652,14 +654,14 @@ class OFWN_Worklog_Settings {
                 $q = new WP_Query([
                     'post_type' => $args[1],
                     'post_status' => $args[2],
-                    'meta_query' => [[
+                    'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                         'key' => $args[0],
                         'compare' => 'EXISTS'
                     ]],
                     'fields' => 'ids',
                     'nopaging' => true,
                     'no_found_rows' => true,
-                    'suppress_filters' => true,
+                    // 'suppress_filters' => true, // VIP: 禁止のため無効化
                 ]);
                 $duplicate_cpts = [];
                 $parent_counts = [];
@@ -687,7 +689,7 @@ class OFWN_Worklog_Settings {
                 } else {
                     $q = new WP_Query([
                         'post_type' => 'of_work_note',
-                        'meta_query' => [[
+                        'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                             'key' => '_ofwn_bound_post_id',
                             'value' => $dup->parent_id,
                             'compare' => '='
@@ -698,7 +700,7 @@ class OFWN_Worklog_Settings {
                         'offset' => 1,
                         'fields' => 'ids',
                         'no_found_rows' => true,
-                        'suppress_filters' => true,
+                        // 'suppress_filters' => true, // VIP: 禁止のため無効化
                     ]);
                     $cpt_ids = $q->posts;
                     wp_cache_set($cache_key, $cpt_ids, 'ofwn', 300);
@@ -719,7 +721,7 @@ class OFWN_Worklog_Settings {
                 $q = new WP_Query([
                     'post_type' => 'any',
                     'post_status' => 'any',
-                    'meta_query' => [[
+                    'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                         'key' => $key,
                         'value' => '',
                         'compare' => '='
@@ -727,7 +729,7 @@ class OFWN_Worklog_Settings {
                     'fields' => 'ids',
                     'nopaging' => true,
                     'no_found_rows' => true,
-                    'suppress_filters' => true,
+                    // 'suppress_filters' => true, // VIP: 禁止のため無効化
                 ]);
                 $empty_count = 0;
                 foreach ($q->posts as $post_id) {
@@ -775,7 +777,8 @@ class OFWN_Worklog_Settings {
      */
     public function ajax_debug_meta_status() {
         // ノンス検証
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_debug_meta')) {
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+        if (!wp_verify_nonce($nonce, 'ofwn_debug_meta')) {
             wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
@@ -801,7 +804,7 @@ class OFWN_Worklog_Settings {
                     $q = new WP_Query([
                         'post_type' => ['post', 'page'],
                         'post_status' => 'publish',
-                        'meta_query' => [[
+                        'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                             'key' => $key,
                             'value' => '',
                             'compare' => '!='
@@ -809,7 +812,7 @@ class OFWN_Worklog_Settings {
                         'fields' => 'ids',
                         'nopaging' => true,
                         'no_found_rows' => true,
-                        'suppress_filters' => true,
+                        // 'suppress_filters' => true, // VIP: 禁止のため無効化
                     ]);
                     $count = count($q->posts);
                     wp_cache_set($cache_key, $count, 'ofwn', 300);
@@ -832,7 +835,7 @@ class OFWN_Worklog_Settings {
                     'fields' => 'ids',
                     'nopaging' => true,
                     'no_found_rows' => true,
-                    'suppress_filters' => true,
+                    // 'suppress_filters' => true, // VIP: 禁止のため無効化
                 ]);
                 $total_cpts = count($q->posts);
                 $unique_parents = [];
@@ -860,14 +863,14 @@ class OFWN_Worklog_Settings {
                 $q = new WP_Query([
                     'post_type' => $args[1],
                     'post_status' => $args[2],
-                    'meta_query' => [[
+                    'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                         'key' => $args[0],
                         'compare' => 'EXISTS'
                     ]],
                     'fields' => 'ids',
                     'nopaging' => true,
                     'no_found_rows' => true,
-                    'suppress_filters' => true,
+                    // 'suppress_filters' => true, // VIP: 禁止のため無効化
                 ]);
                 $parent_counts = [];
                 foreach ($q->posts as $post_id) {
@@ -897,7 +900,7 @@ class OFWN_Worklog_Settings {
             } else {
                 $q = new WP_Query([
                     'post_type' => ['post', 'page'],
-                    'meta_query' => [
+                    'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                         'relation' => 'OR',
                         ['key' => $args[0], 'compare' => 'EXISTS'],
                         ['key' => $args[1], 'compare' => 'EXISTS'],
@@ -909,7 +912,7 @@ class OFWN_Worklog_Settings {
                     'order' => 'DESC',
                     'posts_per_page' => 20,
                     'no_found_rows' => true,
-                    'suppress_filters' => true,
+                    // 'suppress_filters' => true, // VIP: 禁止のため無効化
                 ]);
                 $meta_posts = [];
                 foreach ($q->posts as $post) {
@@ -940,7 +943,7 @@ class OFWN_Worklog_Settings {
                 $q = new WP_Query([
                     'post_type' => ['post', 'page'],
                     'post_status' => $args[5],
-                    'meta_query' => [
+                    'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                         'relation' => 'OR',
                         [
                             'key' => $args[0],
@@ -956,7 +959,7 @@ class OFWN_Worklog_Settings {
                     'orderby' => 'modified',
                     'order' => 'DESC',
                     'no_found_rows' => true,
-                    'suppress_filters' => true,
+                    // 'suppress_filters' => true, // VIP: 禁止のため無効化
                 ]);
                 $should_have_cpts = [];
                 foreach ($q->posts as $post) {
@@ -966,14 +969,14 @@ class OFWN_Worklog_Settings {
                         $cpt_q = new WP_Query([
                             'post_type' => $args[3],
                             'post_status' => $args[4],
-                            'meta_query' => [[
+                            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                                 'key' => $args[2],
                                 'value' => $post->ID,
                                 'compare' => '='
                             ]],
                             'fields' => 'ids',
                             'no_found_rows' => true,
-                            'suppress_filters' => true,
+                            // 'suppress_filters' => true, // VIP: 禁止のため無効化
                         ]);
                         if (empty($cpt_q->posts)) {
                             $should_have_cpts[] = (object)[
@@ -1005,7 +1008,8 @@ class OFWN_Worklog_Settings {
      */
     public function ajax_fix_missing_cpts() {
         // ノンス検証
-        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ofwn_fix_missing_cpts')) {
+        $nonce = isset($_POST['nonce']) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+        if (!wp_verify_nonce($nonce, 'ofwn_fix_missing_cpts')) {
             wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
         }
         
@@ -1028,7 +1032,7 @@ class OFWN_Worklog_Settings {
                 $q = new WP_Query([
                     'post_type' => ['post', 'page'],
                     'post_status' => $args[8],
-                    'meta_query' => [
+                    'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                         'relation' => 'OR',
                         [
                             'key' => $args[0],
@@ -1044,7 +1048,7 @@ class OFWN_Worklog_Settings {
                     'orderby' => 'modified',
                     'order' => 'DESC',
                     'no_found_rows' => true,
-                    'suppress_filters' => true,
+                    // 'suppress_filters' => true, // VIP: 禁止のため無効化
                 ]);
                 $missing_posts = [];
                 foreach ($q->posts as $post) {
@@ -1054,14 +1058,14 @@ class OFWN_Worklog_Settings {
                         $cpt_q = new WP_Query([
                             'post_type' => $args[6],
                             'post_status' => $args[7],
-                            'meta_query' => [[
+                            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                                 'key' => $args[5],
                                 'value' => $post->ID,
                                 'compare' => '='
                             ]],
                             'fields' => 'ids',
                             'no_found_rows' => true,
-                            'suppress_filters' => true,
+                            // 'suppress_filters' => true, // VIP: 禁止のため無効化
                         ]);
                         if (empty($cpt_q->posts)) {
                             $missing_posts[] = (object)[
