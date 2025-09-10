@@ -86,6 +86,16 @@ class OF_Work_Notes {
         
         // 配布確認AJAX
         add_action('wp_ajax_ofwn_check_distribution', [$this, 'ajax_check_distribution']);
+        
+        // CPT「作業メモ」のみクラシックエディター使用
+        add_filter('use_block_editor_for_post_type', [$this, 'ofwn_use_classic_editor'], 10, 2);
+    }
+    
+    /**
+     * CPT「作業メモ」のみクラシックエディターを使用
+     */
+    public function ofwn_use_classic_editor($use, $post_type) {
+        return ($post_type === self::CPT) ? false : $use;
     }
     
     /**
