@@ -22,3 +22,6 @@
 
 # Plugin Check対応（自動アップデータ除外）
 /includes/class-ofwn-updater.php export-ignore
+
+/vendor export-ignore
+/composer.* export-ignore

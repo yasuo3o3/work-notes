@@ -54,3 +54,5 @@ updates/beta.json
 update-changelog.sh
 /.history/
 .history/
+/vendor
+/composer.lock
