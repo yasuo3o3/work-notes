@@ -57,3 +57,9 @@ update-changelog.sh
 /vendor
 /composer.lock
 /vendor
+
+
+
+GUTENBERG-CPT-FIX-TEST.md
+PREFILL-TEST.md
+UNINSTALL-CHECKLIST.md
