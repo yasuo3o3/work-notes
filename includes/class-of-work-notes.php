@@ -764,11 +764,11 @@ class OF_Work_Notes {
         if (!current_user_can('edit_post', $post->ID)) return;
         wp_nonce_field(self::NONCE, self::NONCE);
 
-        // Plugin Check緩和: meta_queryは投稿に紐づく作業ノートを特定するため必須
-        // 推奨: wp_postmetaテーブルに INDEX(_ofwn_target_type, _ofwn_target_id) を作成
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 20,
+            // Plugin Check緩和: meta_queryは投稿に紐づく作業ノートを特定するため必須
+            // 推奨: wp_postmetaテーブルに INDEX(_ofwn_target_type, _ofwn_target_id) を作成
             'meta_query' => [
                 'relation' => 'AND',
                 ['key' => '_ofwn_target_type', 'value' => 'post', 'compare' => '=', 'type' => 'CHAR'],
