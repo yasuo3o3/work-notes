@@ -764,12 +764,12 @@ class OF_Work_Notes {
         if (!current_user_can('edit_post', $post->ID)) return;
         wp_nonce_field(self::NONCE, self::NONCE);
 
+        // Plugin Check緩和: meta_queryは投稿に紐づく作業ノートを特定するため必須
+        // 推奨: wp_postmetaテーブルに INDEX(_ofwn_target_type, _ofwn_target_id) を作成
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 20,
-            // Plugin Check緩和: meta_queryは投稿に紐づく作業ノートを特定するため必須
-            // 推奨: wp_postmetaテーブルに INDEX(_ofwn_target_type, _ofwn_target_id) を作成
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 'relation' => 'AND',
                 ['key' => '_ofwn_target_type', 'value' => 'post', 'compare' => '=', 'type' => 'CHAR'],
                 ['key' => '_ofwn_target_id', 'value' => (string)$post->ID, 'compare' => '=', 'type' => 'CHAR'],
@@ -966,7 +966,7 @@ class OF_Work_Notes {
             $args = [
                 'post_type' => self::CPT,
                 'posts_per_page' => 1,
-                'meta_query' => [
+                'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                     [
                         'key' => '_ofwn_bound_post_id',
                         'value' => $post_id,
@@ -1471,15 +1471,15 @@ class OF_Work_Notes {
             'post_type' => self::CPT,
             'posts_per_page' => 1,
             'post_status' => 'publish',
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 ['key' => '_ofwn_bound_post_id', 'value' => $post_id, 'type' => 'NUMERIC', 'compare' => '=']
             ],
             'orderby' => [
-                'meta_value' => 'DESC',        // 実施日優先（Plugin Check対応: meta_value必須）
+                'meta_value' => 'DESC',         // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- 絞り込みに必要 実施日優先
                 'post_modified_gmt' => 'DESC', // 次点で更新日時
                 'post_date' => 'DESC'          // 最後に作成日時
             ],
-            'meta_key' => '_ofwn_work_date',   // Plugin Check対応: meta_keyでソート用
+            'meta_key' => '_ofwn_work_date',    // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- 並び替えに必要
             'meta_type' => 'NUMERIC'
         ];
         
@@ -1493,7 +1493,7 @@ class OF_Work_Notes {
         // 2. 正規リンクでヒットしない場合、フォールバック検索: Plugin Check緩和
         if (empty($query->posts)) {
             // Plugin Check緩和: meta_queryで未リンク作業ノートを検索（推奨INDEX追加）
-            $query_args['meta_query'] = [
+            $query_args['meta_query'] = [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 'relation' => 'AND',
                 ['key' => '_ofwn_target_type', 'value' => ['post', 'page'], 'compare' => 'IN', 'type' => 'CHAR'],
                 ['key' => '_ofwn_target_id', 'value' => (string)$post_id, 'compare' => '=', 'type' => 'CHAR'],
@@ -1780,7 +1780,7 @@ class OF_Work_Notes {
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 [
                     'key' => '_ofwn_bound_post_id',
                     'value' => $post_id,
@@ -1842,7 +1842,7 @@ class OF_Work_Notes {
         $args = [
             'post_type' => self::CPT,
             'posts_per_page' => 1,
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 [
                     'key' => '_ofwn_bound_post_id',
                     'value' => $post_id,
@@ -1920,7 +1920,7 @@ class OF_Work_Notes {
         // Plugin Check緩和: 推奨 INDEX(meta_key, meta_value) for _ofwn_content_hash
         $args = [
             'post_type' => self::CPT,
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 [
                     'key' => '_ofwn_content_hash',
                     'value' => $content_hash,
@@ -2248,7 +2248,7 @@ class OF_Work_Notes {
             'posts_per_page' => -1,
             'orderby' => 'date',
             'order' => 'DESC',
-            'meta_query' => [
+            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                 [
                     'key' => '_ofwn_bound_post_id',
                     'value' => $post_id,
@@ -2381,7 +2381,7 @@ class OF_Work_Notes {
             $args = [
                 'post_type' => self::CPT,
                 'posts_per_page' => 1,
-                'meta_query' => [
+                'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面のフィルタ用途
                     [
                         'key' => '_ofwn_bound_post_id',
                         'value' => $post_id,
