@@ -223,10 +223,10 @@ class OFWN_List_Table extends WP_List_Table {
             'post_type'      => OF_Work_Notes::CPT,
             'posts_per_page' => $per_page,
             'paged'          => $paged,
-            's'              => $search,
-            // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+            's'              => $search,            
             // 理由: 管理画面リストのフィルタリングに必要なため使用。
             // 大量データ時のパフォーマンス対策として(meta_key, meta_value)の複合INDEXを追加済み。
+            // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
             'meta_query'     => $meta_query,
             'orderby'        => $orderby_arg,
             'order'          => $order,
