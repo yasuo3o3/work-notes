@@ -224,9 +224,9 @@ class OFWN_List_Table extends WP_List_Table {
             'posts_per_page' => $per_page,
             'paged'          => $paged,
             's'              => $search,
-            // Plugin Check緩和: meta_queryで作業ノートリスト絞り込み（ステータス、担当者等）
             // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-            // 推奨: wp_postmetaテーブルに複合INDEX(meta_key, meta_value) を作成
+            // Plugin Check緩和: meta_queryで作業ノートリスト絞り込み
+            // 推奨: wp_postmetaに(meta_key, meta_value)インデックスを追加
             'meta_query'     => $meta_query,
             'orderby'        => $orderby_arg,
             'order'          => $order,
