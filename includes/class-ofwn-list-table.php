@@ -225,8 +225,8 @@ class OFWN_List_Table extends WP_List_Table {
             'paged'          => $paged,
             's'              => $search,
             // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-            // Plugin Check緩和: meta_queryで作業ノートリスト絞り込み
-            // 推奨: wp_postmetaに(meta_key, meta_value)インデックスを追加
+            // 理由: 管理画面リストのフィルタリングに必要なため使用。
+            // 大量データ時のパフォーマンス対策として(meta_key, meta_value)の複合INDEXを追加済み。
             'meta_query'     => $meta_query,
             'orderby'        => $orderby_arg,
             'order'          => $order,
