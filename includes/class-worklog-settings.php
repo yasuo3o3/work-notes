@@ -609,7 +609,7 @@ class OFWN_Worklog_Settings {
                     $q = new WP_Query([
                         'post_type' => 'any',
                         'post_status' => 'any',
-                        'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
+                        'meta_query' => [[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                             'key' => $meta_key,
                             'compare' => 'EXISTS'
                         ]],
@@ -654,7 +654,7 @@ class OFWN_Worklog_Settings {
                 $q = new WP_Query([
                     'post_type' => $args[1],
                     'post_status' => $args[2],
-                    'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
+                    'meta_query' => [[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                         'key' => $args[0],
                         'compare' => 'EXISTS'
                     ]],
@@ -689,7 +689,7 @@ class OFWN_Worklog_Settings {
                 } else {
                     $q = new WP_Query([
                         'post_type' => 'of_work_note',
-                        'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
+                        'meta_query' => [[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                             'key' => '_ofwn_bound_post_id',
                             'value' => $dup->parent_id,
                             'compare' => '='
@@ -721,7 +721,7 @@ class OFWN_Worklog_Settings {
                 $q = new WP_Query([
                     'post_type' => 'any',
                     'post_status' => 'any',
-                    'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
+                    'meta_query' => [[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                         'key' => $key,
                         'value' => '',
                         'compare' => '='
@@ -804,7 +804,7 @@ class OFWN_Worklog_Settings {
                     $q = new WP_Query([
                         'post_type' => ['post', 'page'],
                         'post_status' => 'publish',
-                        'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
+                        'meta_query' => [[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                             'key' => $key,
                             'value' => '',
                             'compare' => '!='
@@ -863,7 +863,7 @@ class OFWN_Worklog_Settings {
                 $q = new WP_Query([
                     'post_type' => $args[1],
                     'post_status' => $args[2],
-                    'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
+                    'meta_query' => [[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                         'key' => $args[0],
                         'compare' => 'EXISTS'
                     ]],
@@ -969,7 +969,7 @@ class OFWN_Worklog_Settings {
                         $cpt_q = new WP_Query([
                             'post_type' => $args[3],
                             'post_status' => $args[4],
-                            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
+                            'meta_query' => [[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                                 'key' => $args[2],
                                 'value' => $post->ID,
                                 'compare' => '='
@@ -1058,7 +1058,7 @@ class OFWN_Worklog_Settings {
                         $cpt_q = new WP_Query([
                             'post_type' => $args[6],
                             'post_status' => $args[7],
-                            'meta_query' => [ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
+                            'meta_query' => [[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途[ // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 管理画面の絞り込み用途
                                 'key' => $args[5],
                                 'value' => $post->ID,
                                 'compare' => '='
