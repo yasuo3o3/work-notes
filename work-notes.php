@@ -46,27 +46,15 @@ register_activation_hook(__FILE__, 'work_notes_activate');
 register_deactivation_hook(__FILE__, 'work_notes_deactivate');
 
 function work_notes_activate() {
-    // 将来のための置き場：
-    // - CPTリライトの反映（必要時）
-    // - 初期オプションの用意
-    // - capabilities 付与 など
-    
-    // 仮想配布ルート用のリライトルール初期化フラグ
-    if (!get_option('ofwn_rewrite_flushed')) {
-        add_option('ofwn_rewrite_flushed', '1');
-        if (function_exists('flush_rewrite_rules')) {
-            flush_rewrite_rules();
-        }
-    }
+    // プラグイン有効化時の初期化
+    // CPT登録のみで独自リライトルールは使用しないため flush_rewrite_rules() は不要
+    // 将来的に独自URLパターンが必要になった場合のみ追加すること
 }
 
 function work_notes_deactivate() {
-    // 将来のための置き場：
-    // - cronの停止
-    // - 一時データの掃除（削除はしない）
-    if (function_exists('flush_rewrite_rules')) {
-        flush_rewrite_rules();
-    }
+    // プラグイン無効化時のクリーンアップ
+    // CPTのみなので特別な処理は不要
+    // 将来的にcronやキャッシュを使用する場合はここで停止/削除を行う
 }
 
 // 起動

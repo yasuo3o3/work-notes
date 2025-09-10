@@ -50,12 +50,14 @@ class OF_Work_Notes {
         // add_action('save_post_page', [$this, 'auto_create_work_note_from_meta'], 50, 2);
         add_action('wp_after_insert_post', [$this, 'final_create_work_note_from_meta'], 30, 4);
         
-        // デバッグ用フックは保持
-        add_action('save_post_post', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_post', [$this, 'debug_save_timing_late'], 100, 2);
-        add_action('save_post_page', [$this, 'debug_save_timing_early'], 5, 2);
-        add_action('save_post_page', [$this, 'debug_save_timing_late'], 100, 2);
-        add_action('wp_after_insert_post', [$this, 'debug_after_insert_post'], 10, 4);
+        // デバッグ用フック（デバッグ環境でのみ登録）
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            add_action('save_post_post', [$this, 'debug_save_timing_early'], 5, 2);
+            add_action('save_post_post', [$this, 'debug_save_timing_late'], 100, 2);
+            add_action('save_post_page', [$this, 'debug_save_timing_early'], 5, 2);
+            add_action('save_post_page', [$this, 'debug_save_timing_late'], 100, 2);
+            add_action('wp_after_insert_post', [$this, 'debug_after_insert_post'], 10, 4);
+        }
         
         // AJAX エンドポイント追加（JavaScript主導の作業メモ作成用）
         add_action('wp_ajax_ofwn_create_work_note', [$this, 'ajax_create_work_note']);
