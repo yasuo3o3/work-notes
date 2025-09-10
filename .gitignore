@@ -63,3 +63,4 @@ update-changelog.sh
 GUTENBERG-CPT-FIX-TEST.md
 PREFILL-TEST.md
 UNINSTALL-CHECKLIST.md
+composer.lock
