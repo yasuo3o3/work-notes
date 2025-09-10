@@ -7,24 +7,25 @@
 /docs export-ignore
 /tests export-ignore
 /updates export-ignore
+/vendor export-ignore
+/zips export-ignore
 
 # 設定ファイル
 /.editorconfig export-ignore
 /.gitattributes export-ignore
 /.gitignore export-ignore
-/composer.json export-ignore
-/composer.lock export-ignore
+/.distignore export-ignore
+/composer.* export-ignore
 /phpcs.xml export-ignore
 /update-changelog.sh export-ignore
 
-# ドキュメント（Markdown）
+# ドキュメント・ライセンス
 *.md export-ignore
+/LICENSE export-ignore
 
 # Plugin Check対応（自動アップデータ除外）
 /includes/class-ofwn-updater.php export-ignore
 
-/vendor export-ignore
-/composer.* export-ignore
-
-/.distignore export-ignore
-/LICENSE export-ignore
+# 開発/検証ファイル
+*.zip export-ignore
+*.log export-ignore
