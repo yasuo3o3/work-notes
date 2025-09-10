@@ -73,17 +73,25 @@ $wpdb->query($wpdb->prepare(
 // 通知機能関連のトランジェントを削除
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
-$wpdb->query($wpdb->prepare(
-    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-    $wpdb->esc_like('_transient_ofwn_worklog_') . '%'
-));
-
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Plugin uninstall cleanup: Safe prepared query with esc_like()
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching -- Plugin uninstall: No caching needed for cleanup operations
-$wpdb->query($wpdb->prepare(
-    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-    $wpdb->esc_like('_transient_timeout_ofwn_worklog_') . '%'
-));
-
+// Replace direct SQL with options scan + delete_option by prefix
+$__ofwn_prefixes = array('_transient_ofwn_worklog_');
+$__ofwn_all = function_exists('wp_load_alloptions') ? wp_load_alloptions() : array();
+if ( is_array($__ofwn_all) ) {
+    foreach ( array_keys($__ofwn_all) as $__k ) {
+        foreach ( $__ofwn_prefixes as $__p ) {
+            if ( 0 === strpos($__k, $__p) ) { delete_option($__k); }
+        }
+    }
+}
+// Replace direct SQL with options scan + delete_option by prefix
+$__ofwn_prefixes = array('_transient_timeout_ofwn_worklog_');
+$__ofwn_all2 = function_exists('wp_load_alloptions') ? wp_load_alloptions() : array();
+if ( is_array($__ofwn_all2) ) {
+    foreach ( array_keys($__ofwn_all2) as $__k ) {
+        foreach ( $__ofwn_prefixes as $__p ) {
+            if ( 0 === strpos($__k, $__p) ) { delete_option($__k); }
+        }
+    }
+}
 // プラグイン削除後のキャッシュクリア
 wp_cache_flush();
