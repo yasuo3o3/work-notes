@@ -56,3 +56,4 @@ update-changelog.sh
 .history/
 /vendor
 /composer.lock
+/vendor
