@@ -225,13 +225,15 @@ class OFWN_List_Table extends WP_List_Table {
             'paged'          => $paged,
             's'              => $search,
             // Plugin Check緩和: meta_queryで作業ノートリスト絞り込み（ステータス、担当者等）
+            // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
             // 推奨: wp_postmetaテーブルに複合INDEX(meta_key, meta_value) を作成
             'meta_query'     => $meta_query,
             'orderby'        => $orderby_arg,
             'order'          => $order,
-        ];
+            ];
         if ('ofwn_date' === $orderby) {
             // Plugin Check緩和: meta_keyでソート用メタフィールド指定
+            // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
             $args['meta_key'] = '_ofwn_work_date';
             $args['meta_type'] = 'CHAR'; // 日付文字列として扱う
         }
