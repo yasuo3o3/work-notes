@@ -18,10 +18,14 @@ define('OFWN_URL', plugin_dir_url(__FILE__));
 
 /**
  * デバッグログ出力ヘルパー関数
+ * 本番環境での error_log() 呼び出しを避ける
  */
 function ofwn_log($message) {
     if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-        error_log('[OFWN] ' . $message);
+        // WP_DEBUG_LOG が有効なら専用ログファイルに出力
+        if (function_exists('wp_debug_log')) {
+            wp_debug_log('[OFWN] ' . $message);
+        }
     }
 }
 
