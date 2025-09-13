@@ -84,8 +84,6 @@ class OF_Work_Notes {
         add_filter('query_vars', [$this, 'add_query_vars']);
         add_action('template_redirect', [$this, 'handle_updates_request']);
         
-        // 配布確認AJAX
-        add_action('wp_ajax_ofwn_check_distribution', [$this, 'ajax_check_distribution']);
         
         // CPT「作業メモ」のみクラシックエディター使用
         add_filter('use_block_editor_for_post_type', [$this, 'ofwn_use_classic_editor'], 10, 2);
@@ -1700,66 +1698,6 @@ class OF_Work_Notes {
         exit;
     }
     
-    /**
-     * 配布エンドポイント確認AJAX
-     */
-    public function ajax_check_distribution() {
-        $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
-        if (!wp_verify_nonce($nonce, 'ofwn_distribution_check')) {
-            wp_send_json_error(['message' => __('セキュリティチェックに失敗しました。', 'work-notes')]);
-        }
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('権限がありません。', 'work-notes')]);
-        }
-        
-        $test_url = home_url('/updates/stable.json');
-        $response = wp_remote_get($test_url, [
-            'timeout' => 10,
-            'sslverify' => false
-        ]);
-        
-        if (is_wp_error($response)) {
-            wp_send_json_error([
-                'message' => sprintf(
-                    /* translators: 1: test file URL, 2: error message */
-                    __('テストURL %1$s へのアクセスに失敗: %2$s', 'work-notes'),
-                    esc_url($test_url),
-                    esc_html($response->get_error_message())
-                )
-            ]);
-        }
-        
-        $status_code = wp_remote_retrieve_response_code($response);
-        $content_type = wp_remote_retrieve_header($response, 'content-type');
-        
-        if (200 === $status_code) {
-            wp_send_json_success([
-                'message' => wp_kses_post(sprintf(
-                    /* translators: 1: endpoint URL, 2: response Content-Type. Note: <br> tags are intentional. */
-                    __('配布エンドポイントは正常に動作しています。<br>URL: %1$s<br>Content-Type: %2$s', 'work-notes'),
-                    esc_url($test_url),
-                    esc_html($content_type)))
-            ]);
-        } elseif (404 === $status_code) {
-            wp_send_json_error([
-                'message' => wp_kses_post(sprintf(
-                    /* translators: 1: primary file path, 2: alternative file path. Note: <br> tags are intentional. */
-                    __('テストファイルが見つかりません (404)。<br>%1$s または %2$s にファイルを配置してください。', 'work-notes'),
-                    esc_html(wp_upload_dir()['basedir'] . '/work-notes-updates/stable.json'),
-                    esc_html(OFWN_DIR . 'updates/stable.json')))
-            ]);
-        } else {
-            wp_send_json_error([
-                'message' => sprintf(
-                    /* translators: 1: HTTP status code, 2: response URL */
-                    __('予期しないレスポンス (HTTP %1$d): %2$s', 'work-notes'),
-                    (int) $status_code,
-                    esc_url($test_url)
-                )
-            ]);
-        }
-    }
     
     /**
      * タイミング調査用: 早期段階でのメタデータ確認
