@@ -3,6 +3,25 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and uses Semantic Versioning.
 
 ## [Unreleased]
+## [1.0.4] - 2025-09-13
+### Removed
+- 独立更新機構削除（WordPress.org配布準備）
+- 配布エンドポイント機能削除（GitHub Releases依存排除）
+- 作業ログ促し（Snackbar）機能完全削除
+- 設定管理機能削除（class-worklog-settings.php、worklog-settings.js/css）
+- 通知関連メタデータ管理機能削除（class-worklog-meta.php、worklog-editor.js）
+
+### Changed
+- WordPress.org配布基準への完全準拠
+- キャッシュクリア機能の制限（管理者権限のみ）
+- ファイル更新時刻チェック機能追加（開発環境判定）
+- メタボックス表示ロジック最適化
+
+### Technical
+- PHP構文チェック通過確認（find + php -l）
+- WordPress Coding Standards準拠維持
+- 配布用ZIP最適化（.gitattributes export-ignore設定）
+- 開発専用ファイル除外設定
 
 ## [1.0.3] - 2025-01-09
 ### Changed
