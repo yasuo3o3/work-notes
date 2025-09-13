@@ -4,7 +4,6 @@ if (!defined('WP_UNINSTALL_PLUGIN')) exit;
 // オプションの削除
 delete_option('ofwn_requesters');
 delete_option('ofwn_workers');
-delete_option('ofwn_update_channel');
 delete_option('ofwn_migrated_version');
 
 // 通知機能関連オプションの削除（マイグレーションで削除されているが念のため）

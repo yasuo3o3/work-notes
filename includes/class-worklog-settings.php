@@ -51,13 +51,6 @@ class OFWN_Worklog_Settings {
             'show_in_rest' => false,
             'autoload' => false
         ]);
-        register_setting('ofwn_settings', 'ofwn_update_channel', [
-            'type' => 'string',
-            'sanitize_callback' => [$this, 'sanitize_update_channel'],
-            'default' => 'stable',
-            'show_in_rest' => false,
-            'autoload' => false
-        ]);
 
         add_settings_section('ofwn_section_main', __('マスター管理', 'work-notes'), '__return_false', 'ofwn_settings');
 
@@ -73,16 +66,6 @@ class OFWN_Worklog_Settings {
             echo '<p class="description">' . esc_html__('ここに入力した内容が「担当者」のセレクトに表示されます。', 'work-notes') . '</p>';
         }, 'ofwn_settings', 'ofwn_section_main');
 
-        add_settings_section('ofwn_section_update', __('アップデート設定', 'work-notes'), '__return_false', 'ofwn_settings');
-
-        add_settings_field('ofwn_update_channel', __('更新チャンネル', 'work-notes'), function(){
-            $current = get_option('ofwn_update_channel', 'stable');
-            echo '<select name="ofwn_update_channel">';
-            echo '<option value="stable"' . selected($current, 'stable', false) . '>' . esc_html__('安定版 (Stable)', 'work-notes') . '</option>';
-            echo '<option value="beta"' . selected($current, 'beta', false) . '>' . esc_html__('ベータ版 (Beta)', 'work-notes') . '</option>';
-            echo '</select>';
-            echo '<p class="description">' . esc_html__('プラグインの自動更新で使用するチャンネルを選択してください。', 'work-notes') . '</p>';
-        }, 'ofwn_settings', 'ofwn_section_update');
     }
     
     /**
@@ -96,13 +79,6 @@ class OFWN_Worklog_Settings {
         }, explode("\n", $text)));
         $lines = array_values(array_unique($lines));
         return $lines;
-    }
-    
-    /**
-     * アップデートチャンネルのサニタイズ処理
-     */
-    public function sanitize_update_channel($input) {
-        return in_array($input, ['stable', 'beta'], true) ? $input : 'stable';
     }
 
     /**

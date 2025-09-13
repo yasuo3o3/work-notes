@@ -30,12 +30,10 @@ class OF_Work_Notes {
     const NONCE = 'ofwn_nonce';
     const OPT_REQUESTERS = 'ofwn_requesters';
     const OPT_WORKERS    = 'ofwn_workers';
-    const OPT_UPDATE_CHANNEL = 'ofwn_update_channel';
 
     public function __construct() {
         add_action('init', [$this, 'register_cpt']);
         add_action('init', [$this, 'register_meta_fields']);
-        add_action('init', [$this, 'add_rewrite_rules']);
         
         // 作業ログ機能を初期化
         $this->init_worklog_features();
@@ -80,9 +78,6 @@ class OF_Work_Notes {
         // 作業一覧ページ（一時的に非表示 - 「作業メモ」メニューと重複のため）
         // add_action('admin_menu', [$this, 'add_list_page']);
         
-        // 仮想配布ルート
-        add_filter('query_vars', [$this, 'add_query_vars']);
-        add_action('template_redirect', [$this, 'handle_updates_request']);
         
         
         // CPT「作業メモ」のみクラシックエディター使用
@@ -221,13 +216,6 @@ class OF_Work_Notes {
             'show_in_rest' => false,
             'autoload' => false
         ]);
-        register_setting('ofwn_settings', self::OPT_UPDATE_CHANNEL, [
-            'type' => 'string',
-            'sanitize_callback' => [$this, 'sanitize_update_channel'],
-            'default' => 'stable',
-            'show_in_rest' => false,
-            'autoload' => false
-        ]);
 
         add_settings_section('ofwn_section_main', __('マスター管理', 'work-notes'), '__return_false', 'ofwn_settings');
 
@@ -243,16 +231,6 @@ class OF_Work_Notes {
             echo '<p class="description">' . esc_html__('ここに入力した内容が「担当者」のセレクトに表示されます。', 'work-notes') . '</p>';
         }, 'ofwn_settings', 'ofwn_section_main');
 
-        add_settings_section('ofwn_section_update', __('アップデート設定', 'work-notes'), '__return_false', 'ofwn_settings');
-
-        add_settings_field(self::OPT_UPDATE_CHANNEL, __('更新チャンネル', 'work-notes'), function(){
-            $current = get_option(self::OPT_UPDATE_CHANNEL, 'stable');
-            echo '<select name="'.esc_attr(self::OPT_UPDATE_CHANNEL).'">';
-            echo '<option value="stable"' . selected($current, 'stable', false) . '>' . esc_html__('安定版 (Stable)', 'work-notes') . '</option>';
-            echo '<option value="beta"' . selected($current, 'beta', false) . '>' . esc_html__('ベータ版 (Beta)', 'work-notes') . '</option>';
-            echo '</select>';
-            echo '<p class="description">' . esc_html__('プラグインの自動更新で使用するチャンネルを選択してください。', 'work-notes') . '</p>';
-        }, 'ofwn_settings', 'ofwn_section_update');
     }
 
     public function sanitize_list($raw) {
@@ -265,9 +243,6 @@ class OF_Work_Notes {
         return $lines;
     }
     
-    public function sanitize_update_channel($input) {
-        return in_array($input, ['stable', 'beta'], true) ? $input : 'stable';
-    }
 
     private function default_workers() {
         $roles = ['administrator','editor','author'];
@@ -292,44 +267,6 @@ class OF_Work_Notes {
                 ?>
             </form>
             
-            <hr>
-            
-            <h2><?php esc_html_e('配布エンドポイント確認', 'work-notes'); ?></h2>
-            <p><?php esc_html_e('仮想配布ルート /updates/ の動作を確認します。', 'work-notes'); ?></p>
-            
-            <div id="ofwn-distribution-check">
-                <button type="button" id="ofwn-check-distribution-btn" class="button">
-                    <?php esc_html_e('配布エンドポイントをテスト', 'work-notes'); ?>
-                </button>
-                <div id="ofwn-distribution-result" style="margin-top: 10px;"></div>
-            </div>
-            
-            <script>
-            jQuery(document).ready(function($) {
-                $('#ofwn-check-distribution-btn').on('click', function() {
-                    var $btn = $(this);
-                    var $result = $('#ofwn-distribution-result');
-                    
-                    $btn.prop('disabled', true).text('<?php esc_html_e('確認中...', 'work-notes'); ?>');
-                    $result.html('');
-                    
-                    $.post(ajaxurl, {
-                        action: 'ofwn_check_distribution',
-                        nonce: '<?php echo esc_attr(wp_create_nonce('ofwn_distribution_check')); ?>'
-                    }, function(response) {
-                        if (response.success) {
-                            $result.html('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
-                        } else {
-                            $result.html('<div class="notice notice-error inline"><p>' + response.data.message + '</p></div>');
-                        }
-                    }).fail(function() {
-                        $result.html('<div class="notice notice-error inline"><p><?php esc_html_e('テストに失敗しました。', 'work-notes'); ?></p></div>');
-                    }).always(function() {
-                        $btn.prop('disabled', false).text('<?php esc_html_e('配布エンドポイントをテスト', 'work-notes'); ?>');
-                    });
-                });
-            });
-            </script>
         </div>
         <?php
     }
@@ -1554,149 +1491,7 @@ class OF_Work_Notes {
         wp_send_json_success($data);
     }
     
-    /* ===== 仮想配布ルート ===== */
     
-    /**
-     * リライトルールを追加
-     */
-    public function add_rewrite_rules() {
-        add_rewrite_rule('^updates/([^/]+)/?', 'index.php?ofwn_updates=1&f=$matches[1]', 'top');
-    }
-    
-    /**
-     * クエリ変数を追加
-     */
-    public function add_query_vars($vars) {
-        $vars[] = 'ofwn_updates';
-        $vars[] = 'f';
-        return $vars;
-    }
-    
-    /**
-     * 配布ファイルリクエストを処理
-     */
-    public function handle_updates_request() {
-        if (!get_query_var('ofwn_updates')) {
-            return;
-        }
-        
-        $filename = sanitize_file_name(get_query_var('f'));
-        if (empty($filename)) {
-            status_header(404);
-            exit;
-        }
-        
-        // セキュリティ: パストラバーサル攻撃防止
-        if (strpos($filename, '..') !== false || strpos($filename, '/') !== false) {
-            status_header(404);
-            exit;
-        }
-        
-        // ホワイトリストチェック
-        if (!$this->is_allowed_update_file($filename)) {
-            status_header(404);
-            exit;
-        }
-        
-        // ファイル検索と配信
-        $file_path = $this->find_update_file($filename);
-        if (!$file_path) {
-            status_header(404);
-            exit;
-        }
-        
-        $this->serve_update_file($file_path, $filename);
-        exit;
-    }
-    
-    /**
-     * ファイル名がホワイトリストに含まれるかチェック
-     */
-    private function is_allowed_update_file($filename) {
-        // JSON ファイル
-        if ('stable.json' === $filename || 'beta.json' === $filename) {
-            return true;
-        }
-        
-        // ZIP ファイル (work-notes-*.zip 形式のみ)
-        if (preg_match('/^work-notes-[a-zA-Z0-9\.-]+\.zip$/', $filename)) {
-            return true;
-        }
-        
-        return false;
-    }
-    
-    /**
-     * 更新ファイルを検索（優先順位付き）
-     */
-    private function find_update_file($filename) {
-        $upload_dir = wp_upload_dir();
-        $search_paths = [
-            // 最優先: uploads/work-notes-updates/
-            trailingslashit($upload_dir['basedir']) . 'work-notes-updates/' . $filename,
-            // フォールバック: プラグイン内 updates/
-            OFWN_DIR . 'updates/' . $filename
-        ];
-        
-        foreach ($search_paths as $path) {
-            if (file_exists($path) && is_readable($path)) {
-                return $path;
-            }
-        }
-        
-        return false;
-    }
-    
-    /**
-     * ファイルを配信
-     */
-    private function serve_update_file($file_path, $filename) {
-        // キャッシュヘッダー
-        header('Cache-Control: public, max-age=300');
-        
-        // Content-Type 設定
-        if (str_ends_with($filename, '.json')) {
-            header('Content-Type: application/json; charset=UTF-8');
-        } elseif (str_ends_with($filename, '.zip')) {
-            header('Content-Type: application/zip');
-        }
-        
-        // Content-Length 設定
-        $file_size = filesize($file_path);
-        if ($file_size) {
-            header('Content-Length: ' . $file_size);
-        }
-        
-        // ETag / Last-Modified (オプション)
-        $last_modified = filemtime($file_path);
-        if ($last_modified) {
-            header('Last-Modified: ' . gmdate('D, d M Y H:i:s T', $last_modified));
-            header('ETag: "' . md5($file_path . $last_modified) . '"');
-        }
-        
-        // ファイル出力: WP_Filesystem 使用
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-        WP_Filesystem();
-        global $wp_filesystem;
-        
-        $content = $wp_filesystem->get_contents($file_path);
-        if (false === $content) {
-            wp_die(esc_html__('ファイルの読み込みに失敗しました。', 'work-notes'), esc_html__('エラー', 'work-notes'), ['response' => 500]);
-        }
-        
-        // キャッシュ無効化とバッファクリア
-        nocache_headers();
-        if (ob_get_level()) {
-            ob_end_clean();
-        }
-        
-        // Content-Disposition の設定
-        header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
-        
-        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- バイナリ配信のため生出力が正しい
-        echo $content;
-        exit;
-    }
     
     
     /**
