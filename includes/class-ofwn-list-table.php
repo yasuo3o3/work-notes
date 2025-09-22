@@ -245,7 +245,7 @@ class OFWN_List_Table extends WP_List_Table {
             'update_post_meta_cache'   => false,
             'update_post_term_cache'   => false,
         ]);
-        
+
         if (function_exists('ofwn_cached_ids_query')) {
             $ids = ofwn_cached_ids_query($cache_args, 60);
         } else {
@@ -254,6 +254,27 @@ class OFWN_List_Table extends WP_List_Table {
             if (false === $ids) {
                 $ids = get_posts($cache_args);
                 wp_cache_set($ckey, $ids, 'ofwn', 60);
+            }
+        }
+
+        // 全体件数取得用（ページネーション計算のため）
+        $total_args = array_merge($args, [
+            'fields'                   => 'ids',
+            'posts_per_page'           => -1,
+            'no_found_rows'            => true,
+            'update_post_meta_cache'   => false,
+            'update_post_term_cache'   => false,
+        ]);
+        unset($total_args['paged']); // ページング除外
+
+        if (function_exists('ofwn_cached_ids_query')) {
+            $all_ids = ofwn_cached_ids_query($total_args, 60);
+        } else {
+            $total_ckey = 'ofwn_list_total_v1_' . md5(wp_json_encode($total_args));
+            $all_ids = wp_cache_get($total_ckey, 'ofwn');
+            if (false === $all_ids) {
+                $all_ids = get_posts($total_args);
+                wp_cache_set($total_ckey, $all_ids, 'ofwn', 60);
             }
         }
         
@@ -272,6 +293,11 @@ class OFWN_List_Table extends WP_List_Table {
         // WP_Query オブジェクト形式で包装
         $q = new stdClass();
         $q->posts = $posts;
+
+        // found_posts と max_num_pages を設定（PHP8+の未定義プロパティ警告対策）
+        $total_posts = count($all_ids);
+        $q->found_posts = $total_posts;
+        $q->max_num_pages = ceil($total_posts / $per_page);
 
         $items = [];
         foreach ($q->posts as $p) {

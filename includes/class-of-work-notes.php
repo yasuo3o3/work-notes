@@ -468,7 +468,7 @@ class OF_Work_Notes {
 
     private function resolve_select_or_custom($baseName) {
         // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-        if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
+        if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
         $sel = sanitize_text_field(wp_unslash($_POST[$baseName . '_select'] ?? ''));
         $custom = sanitize_text_field(wp_unslash($_POST[$baseName] ?? ''));
         if ($sel === '__custom__') return $custom;
@@ -848,7 +848,7 @@ class OF_Work_Notes {
         
         if ($is_rest_request && isset($_POST['meta'])) {
             // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
+            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
             // RESTリクエスト時：$_POST['meta']から直接最新値を取得（最優先）
             // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
             $meta = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
@@ -895,7 +895,7 @@ class OF_Work_Notes {
             // RESTリクエスト時の詳細比較
             if ($is_rest_request && isset($_POST['meta'])) {
                 // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-                if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
+                if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
                 // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
                 $meta_compare = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
                 $meta_compare = array_map('sanitize_text_field', $meta_compare);
@@ -1348,7 +1348,7 @@ class OF_Work_Notes {
             $current_post_id = absint(wp_unslash($_GET['post']));
         } elseif (isset($_POST['post_ID'])) {
             // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
+            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
             $current_post_id = absint(wp_unslash($_POST['post_ID']));
         }
         
@@ -1931,7 +1931,7 @@ class OF_Work_Notes {
         // 2. $_POSTから取得を試行
         if (empty($work_title) && empty($work_content)) {
             // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( 'ofwn_action', self::NONCE ); }
+            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
             // $_POST['meta'] を unslash→sanitize（ネスト浅想定）
             // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
             $meta = isset($_POST['meta']) ? wp_unslash($_POST['meta']) : [];
