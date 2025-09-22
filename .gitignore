@@ -57,7 +57,7 @@ update-changelog.sh
 /vendor
 /composer.lock
 /vendor
-
+/zips/
 
 
 GUTENBERG-CPT-FIX-TEST.md

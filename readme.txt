@@ -8,103 +8,109 @@ Requires PHP: 8.0
 License: GPL-2.0-or-later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-クライアント指示や更新作業のメモをWP内で記録・管理するプラグイン。保存後の作業ログ促し機能付き。
+A WordPress plugin for recording and managing work notes related to client instructions and site updates within your WordPress admin.
 
 == Description ==
 
-投稿や固定ページに紐づけた作業メモの記録・一覧管理が可能。
-依頼元/担当者のマスター管理機能付き。
+Work Notes allows you to record and manage work notes linked to posts and pages with requester/worker master management functionality.
 
-= 主な機能 =
+= Key Features =
 
-* 投稿・固定ページに関連する作業メモの記録
-* 依頼元・担当者のマスター管理
-* ステータス管理（依頼・対応中・完了）
-* 実施日による管理
-* 一覧表示・絞り込み検索（依頼元・担当者列でソート可能）
-* 管理バーからクイック追加
-* **NEW** 保存後の作業ログ促し（Snackbar通知）
-* **NEW** 複数ユーザー対象設定
-* **NEW** リビジョンベースでの重複防止
+* Record work notes related to posts and pages
+* Master management for requesters and workers
+* Status management (Requested, In Progress, Completed)
+* Implementation date management
+* List display and filtering search (sortable by requester/worker columns)
+* Quick addition from admin bar
+* Gutenberg block editor integration
+* REST API support via register_post_meta
+* Complete data cleanup on uninstall
 
-= 利用想定 =
+= Use Cases =
 
-* Web制作会社での案件管理
-* サイト保守・更新作業の記録
-* クライアント要望の進捗管理
+* Project management for web development agencies
+* Recording site maintenance and update tasks
+* Progress tracking for client requests
+
+= WordPress.org Distribution =
+
+This plugin is prepared for distribution on WordPress.org Plugin Directory with full compliance to WordPress coding standards and security requirements.
 
 == Installation ==
 
-1. プラグインファイルを `/wp-content/plugins/work-notes` ディレクトリにアップロード
-2. WordPress管理画面の「プラグイン」メニューからプラグインを有効化
-3. 管理画面「作業メモ」から利用開始
-4. 「設定」から依頼元・担当者のマスターを設定（推奨）
+1. Upload the plugin files to the `/wp-content/plugins/work-notes` directory, or install the plugin through the WordPress plugins screen directly.
+2. Activate the plugin through the 'Plugins' screen in WordPress
+3. Use the Work Notes screen to configure the plugin
+4. Set up requesters and workers in Settings (recommended)
 
 == Frequently Asked Questions ==
 
-= どのような権限で使用できますか？ =
+= What user permissions are required? =
 
-編集者以上の権限を持つユーザーが使用できます。設定画面は管理者のみアクセス可能です。
+Users with Editor role or higher can use this plugin. Settings screen is accessible only to administrators.
 
-= データはどこに保存されますか？ =
+= Where is the data stored? =
 
-WordPressのカスタム投稿タイプとしてwp_postsテーブルに、関連情報はwp_postmetaテーブルに保存されます。
+Data is stored as WordPress custom post type in wp_posts table, with related information in wp_postmeta table.
 
-= プラグインを削除するとデータはどうなりますか？ =
+= What happens to data when the plugin is deleted? =
 
-プラグイン削除時に全ての作業メモデータが自動的に削除されます。
+All work note data is automatically deleted when the plugin is uninstalled.
 
 == Screenshots ==
 
-1. 作業メモ一覧画面 - ステータスや依頼元による絞り込み検索が可能
-2. 作業メモ編集画面 - 対象の投稿・依頼元・担当者等の詳細情報を記録
-3. 投稿編集画面での作業メモ表示 - 関連する作業メモを確認・追加
+1. Work Notes list screen - Filter and search by status and requesters
+2. Work Note edit screen - Record detailed information including target post, requester, worker
+3. Post edit screen with Work Notes display - View and add related work notes
 
 == Changelog ==
 = 1.0.5 =
-* セキュリティ監査とレビュー対応完了
-* auth_callback パラメータ数を PHP 8.x 対応に修正
-* register_post_meta 重複登録問題の解決
-* ページネーション処理の WP_Query 実装への最適化
-* WordPress Coding Standards (WPCS) 完全準拠
-* Plugin Check 全項目クリア
+* Security audit and review response completed
+* Fixed auth_callback parameter count for PHP 8.x compatibility (4→6 parameters)
+* Resolved register_post_meta duplicate registration issues
+* Optimized pagination processing with WP_Query implementation
+* WordPress Coding Standards (WPCS) full compliance
+* Plugin Check all items cleared
 
 = 1.0.4 =
-* WordPress.org配布準備完了
-* 独立更新機構削除
-* 配布エンドポイント機能削除
+* WordPress.org distribution preparation completed
+* Removed independent update mechanism
+* Removed distribution endpoint functionality
 
 = 1.0.3 =
-* プラグインチェッカー対応のためのバージョン更新
+* Version update for Plugin Checker compatibility
 
 = 1.0.2 =
-* バージョン番号を1.0.2に統一（Semantic Versioningに完全準拠）
+* Unified version number to 1.0.2 (full Semantic Versioning compliance)
 
 = 1.00 =
-* 作業ログ促し（Snackbar）機能の実装
-* 複数ユーザー対象設定機能
-* リビジョンベースでの重複防止
-* 管理画面一覧に依頼元・担当者列を追加
-* 列のソート機能実装
-* register_post_meta による REST API 対応
-* uninstall.php でのデータ完全削除
-* XSS対策強化とローカライズ改善
-* アセット読み込みの最適化
-* WordPress Coding Standards 完全準拠
+* Work log reminder (Snackbar) functionality implementation
+* Multi-user target setting functionality
+* Revision-based duplicate prevention
+* Added requester and worker columns to admin list
+* Column sorting functionality implementation
+* REST API support via register_post_meta
+* Complete data deletion in uninstall.php
+* Enhanced XSS protection and localization improvements
+* Asset loading optimization
+* WordPress Coding Standards full compliance
 
 = 0.05 =
-* i18n対応の強化
-* セキュリティとパフォーマンス改善
-* WordPress Coding Standards準拠
-* autoload最適化とアセット読み込み改善
-* SQLインジェクション対策強化
+* Enhanced i18n support
+* Security and performance improvements
+* WordPress Coding Standards compliance
+* Autoload optimization and asset loading improvements
+* Enhanced SQL injection protection
 
 = 0.04 =
-* 初回リリース
-* 基本的な作業メモ機能
-* マスター管理機能
+* Initial release
+* Basic work notes functionality
+* Master management functionality
 
 == Upgrade Notice ==
 
+= 1.0.5 =
+Security audit response and PHP 8.x compatibility fixes. Update recommended.
+
 = 0.05 =
-セキュリティ強化と国際化対応を含む重要なアップデート。アップデート推奨。
+Important update including security enhancements and internationalization support. Update recommended.
