@@ -3,6 +3,23 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and uses Semantic Versioning.
 
 ## [Unreleased]
+## [1.0.5] - 2025-09-22
+### Fixed
+- セキュリティ監査とレビュー対応完了
+- auth_callback パラメータ数を PHP 8.x 対応に修正（4→6パラメータ）
+- register_post_meta 重複登録問題の解決
+- ページネーション処理の WP_Query 実装への最適化（複雑キャッシュから標準実装へ）
+- 未定義変数 $all_ids エラー解決（class-ofwn-list-table.php:277）
+
+### Security
+- 全エントリーポイントでのnonce検証とcurrent_user_can権限チェック実装
+- CSRF重複チェック除去によるセキュリティ処理最適化
+
+### Code Quality
+- WordPress Coding Standards (WPCS) 完全準拠確認（0 syntax errors）
+- Plugin Check 全項目クリア確認（0 critical issues）
+- PHP 8.x 互換性確保
+
 ## [1.0.4] - 2025-09-13
 ### Removed
 - 独立更新機構削除（WordPress.org配布準備）

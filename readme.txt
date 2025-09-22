@@ -3,7 +3,7 @@ Contributors: netservice
 Tags: notes, workflow, task-management, admin, gutenberg
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 1.0.4
+Stable tag: 1.0.5
 Requires PHP: 8.0
 License: GPL-2.0-or-later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -61,6 +61,14 @@ WordPressのカスタム投稿タイプとしてwp_postsテーブルに、関連
 3. 投稿編集画面での作業メモ表示 - 関連する作業メモを確認・追加
 
 == Changelog ==
+= 1.0.5 =
+* セキュリティ監査とレビュー対応完了
+* auth_callback パラメータ数を PHP 8.x 対応に修正
+* register_post_meta 重複登録問題の解決
+* ページネーション処理の WP_Query 実装への最適化
+* WordPress Coding Standards (WPCS) 完全準拠
+* Plugin Check 全項目クリア
+
 = 1.0.4 =
 * WordPress.org配布準備完了
 * 独立更新機構削除
