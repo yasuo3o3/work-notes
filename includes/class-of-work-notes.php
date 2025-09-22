@@ -1311,7 +1311,7 @@ class OF_Work_Notes {
             $current_post_id = absint(wp_unslash($_GET['post']));
         } elseif (isset($_POST['post_ID'])) {
             // nonce検証を明示的に実行
-            if (isset($_POST[self::NONCE]) && wp_verify_nonce(wp_unslash($_POST[self::NONCE]), self::NONCE)) {
+            if (isset($_POST[self::NONCE]) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST[self::NONCE])), self::NONCE)) {
                 $current_post_id = absint(wp_unslash($_POST['post_ID']));
             }
         }
