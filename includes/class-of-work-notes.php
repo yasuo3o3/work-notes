@@ -1892,17 +1892,18 @@ class OF_Work_Notes {
         
         // 2. $_POSTから取得を試行
         if (empty($work_title) && empty($work_content)) {
-            // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-            // nonce検証は上位メソッドで実施済み
-            // $_POST['meta'] を unslash→sanitize（ネスト浅想定）
-            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
-            $meta = isset($_POST['meta']) ? wp_unslash($_POST['meta']) : [];
-            $meta = is_array($meta) ? array_map(
-                static function($v){ return is_array($v) ? array_map('sanitize_text_field',$v) : sanitize_text_field($v); },
-                $meta
-            ) : [];
-            $work_title = isset($meta['_ofwn_work_title']) ? sanitize_text_field($meta['_ofwn_work_title']) : '';
-            $work_content = isset($meta['_ofwn_work_content']) ? wp_kses_post($meta['_ofwn_work_content']) : '';
+            // nonce検証を明示的に実行
+            if (isset($_POST[self::NONCE]) && wp_verify_nonce(wp_unslash($_POST[self::NONCE]), self::NONCE)) {
+                // $_POST['meta'] を unslash→sanitize（ネスト浅想定）
+                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
+                $meta = isset($_POST['meta']) ? wp_unslash($_POST['meta']) : [];
+                $meta = is_array($meta) ? array_map(
+                    static function($v){ return is_array($v) ? array_map('sanitize_text_field',$v) : sanitize_text_field($v); },
+                    $meta
+                ) : [];
+                $work_title = isset($meta['_ofwn_work_title']) ? sanitize_text_field($meta['_ofwn_work_title']) : '';
+                $work_content = isset($meta['_ofwn_work_content']) ? wp_kses_post($meta['_ofwn_work_content']) : '';
+            }
         }
         
         // 3. 最終手段: データベースから取得（キャッシュクリア後）
