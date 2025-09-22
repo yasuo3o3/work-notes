@@ -467,8 +467,10 @@ class OF_Work_Notes {
     }
 
     private function resolve_select_or_custom($baseName) {
-        // nonce検証は呼び出し元で実施済みのため削除
+        // nonce検証は呼び出し元で実施済み
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 呼び出し元で検証済み
         $sel = sanitize_text_field(wp_unslash($_POST[$baseName . '_select'] ?? ''));
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- 呼び出し元で検証済み
         $custom = sanitize_text_field(wp_unslash($_POST[$baseName] ?? ''));
         if ($sel === '__custom__') return $custom;
         return $sel ?: $custom;
@@ -858,17 +860,19 @@ class OF_Work_Notes {
             
             // RESTリクエスト時の詳細比較
             if ($is_rest_request && isset($_POST['meta'])) {
-                // nonce検証は上位メソッドで実施済み
-                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
-                $meta_compare = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
-                $meta_compare = array_map('sanitize_text_field', $meta_compare);
-                $rest_work_title = isset($meta_compare['_ofwn_work_title']) ? sanitize_text_field($meta_compare['_ofwn_work_title']) : 'not_set';
-                $rest_work_content = isset($meta_compare['_ofwn_work_content']) ? wp_kses_post($meta_compare['_ofwn_work_content']) : 'not_set';
-                $db_work_title = get_post_meta($post_id, '_ofwn_work_title', true);
-                $db_work_content = get_post_meta($post_id, '_ofwn_work_content', true);
-                
-                ofwn_log('META_COMPARE] REST title: "' . $rest_work_title . '" vs DB title: "' . $db_work_title . '"');
-                ofwn_log('META_COMPARE] REST content: "' . $rest_work_content . '" vs DB content: "' . $db_work_content . '"');
+                // nonce検証を明示的に実行
+                if (isset($_POST[self::NONCE]) && wp_verify_nonce(wp_unslash($_POST[self::NONCE]), self::NONCE)) {
+                    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
+                    $meta_compare = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
+                    $meta_compare = array_map('sanitize_text_field', $meta_compare);
+                    $rest_work_title = isset($meta_compare['_ofwn_work_title']) ? sanitize_text_field($meta_compare['_ofwn_work_title']) : 'not_set';
+                    $rest_work_content = isset($meta_compare['_ofwn_work_content']) ? wp_kses_post($meta_compare['_ofwn_work_content']) : 'not_set';
+                    $db_work_title = get_post_meta($post_id, '_ofwn_work_title', true);
+                    $db_work_content = get_post_meta($post_id, '_ofwn_work_content', true);
+
+                    ofwn_log('META_COMPARE] REST title: "' . $rest_work_title . '" vs DB title: "' . $db_work_title . '"');
+                    ofwn_log('META_COMPARE] REST content: "' . $rest_work_content . '" vs DB content: "' . $db_work_content . '"');
+                }
             }
             
             // 既存CPTの確認: meta_queryで投稿IDに紐づく作業ノートを検索
