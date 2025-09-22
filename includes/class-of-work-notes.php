@@ -857,7 +857,7 @@ class OF_Work_Notes {
             // RESTリクエスト時の詳細比較
             if ($is_rest_request && isset($_POST['meta'])) {
                 // nonce検証を明示的に実行
-                if (isset($_POST[self::NONCE]) && wp_verify_nonce(wp_unslash($_POST[self::NONCE]), self::NONCE)) {
+                if (isset($_POST[self::NONCE]) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST[self::NONCE])), self::NONCE)) {
                     // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
                     $meta_compare = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
                     $meta_compare = array_map('sanitize_text_field', $meta_compare);
