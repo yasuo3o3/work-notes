@@ -378,12 +378,8 @@ class OF_Work_Notes {
             if ($debug_log) ofwn_log('Nonce field missing');
             return;
         }
-        
-        $nonce = isset($_POST[self::NONCE]) ? sanitize_text_field(wp_unslash($_POST[self::NONCE])) : '';
-        if (!wp_verify_nonce($nonce, self::NONCE)) {
-            if ($debug_log) ofwn_log('Nonce verification failed');
-            return;
-        }
+
+        check_admin_referer(self::NONCE, self::NONCE);
         
         // 自動保存スキップ
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
