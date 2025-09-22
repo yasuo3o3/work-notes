@@ -587,7 +587,7 @@ class OF_Work_Notes {
                     'show_in_rest' => true,
                     'single' => true,
                     'type' => 'string',
-                    'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
+                    'auth_callback' => function($allowed, $meta_key, $post_id, $user_id, $cap, $caps) {
                         return current_user_can('edit_post', $post_id);
                     },
                     'sanitize_callback' => $sanitize_callback
@@ -600,7 +600,7 @@ class OF_Work_Notes {
             'show_in_rest' => true,
             'single' => true,
             'type' => 'string',
-            'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
+            'auth_callback' => function($allowed, $meta_key, $post_id, $user_id, $cap, $caps) {
                 return current_user_can('edit_post', $post_id);
             },
             'sanitize_callback' => 'sanitize_text_field'
@@ -610,7 +610,7 @@ class OF_Work_Notes {
             'show_in_rest' => true,
             'single' => true,
             'type' => 'string', 
-            'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
+            'auth_callback' => function($allowed, $meta_key, $post_id, $user_id, $cap, $caps) {
                 return current_user_can('edit_post', $post_id);
             },
             'sanitize_callback' => 'sanitize_text_field'
@@ -621,7 +621,7 @@ class OF_Work_Notes {
             'show_in_rest' => true,
             'single' => true,
             'type' => 'integer',
-            'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
+            'auth_callback' => function($allowed, $meta_key, $post_id, $user_id, $cap, $caps) {
                 return current_user_can('edit_post', $post_id);
             },
             'sanitize_callback' => 'absint'
@@ -634,7 +634,7 @@ class OF_Work_Notes {
                 'show_in_rest' => true,
                 'single' => true,
                 'type' => 'string',
-                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
+                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id, $cap, $caps) {
                     return current_user_can('edit_post', $post_id);
                 },
                 'sanitize_callback' => 'sanitize_text_field'
@@ -645,27 +645,7 @@ class OF_Work_Notes {
         // CPT（of_work_note）は標準のpost_title/post_contentを使用
         $input_meta_post_types = ['post', 'page'];
         
-        foreach ($input_meta_post_types as $post_type) {
-            register_post_meta($post_type, '_ofwn_work_title', [
-                'show_in_rest' => true,
-                'single' => true,
-                'type' => 'string',
-                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
-                    return current_user_can('edit_post', $post_id);
-                },
-                'sanitize_callback' => 'sanitize_text_field'
-            ]);
-            
-            register_post_meta($post_type, '_ofwn_work_content', [
-                'show_in_rest' => true,
-                'single' => true,
-                'type' => 'string',
-                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
-                    return current_user_can('edit_post', $post_id);
-                },
-                'sanitize_callback' => 'sanitize_textarea_field'
-            ]);
-        }
+        // _ofwn_work_title と _ofwn_work_content は上記ループで既に登録済みのため削除
         
         // CPT側の_ofwn_work_title, _ofwn_work_contentは重複のため削除
         // （post/page側での登録で十分、CPTでは post_title/post_content を使用）
@@ -679,7 +659,7 @@ class OF_Work_Notes {
                 'show_in_rest' => true,
                 'single' => true,
                 'type' => 'string',
-                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
+                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id, $cap, $caps) {
                     return current_user_can('edit_post', $post_id);
                 },
                 'sanitize_callback' => 'sanitize_text_field'

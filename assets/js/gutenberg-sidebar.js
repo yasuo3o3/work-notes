@@ -5,8 +5,8 @@
 (function() {
     'use strict';
     
-    // デバッグ用：WordPress グローバルオブジェクトの確認（本番では削除）
-    if (window.ofwnDebug) {
+    // デバッグ用：WordPress グローバルオブジェクトの確認
+    if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
         console.log('Work Notes Debug: wp object available:', typeof wp !== 'undefined');
         console.log('Work Notes Debug: wp.element:', typeof wp.element !== 'undefined');
         console.log('Work Notes Debug: wp.editPost:', typeof wp.editPost !== 'undefined');
@@ -88,7 +88,9 @@
             setMeta(newMeta);
             
             // デバッグログ
-            if (window.ofwnDebug) console.log('Work Notes: メタフィールド更新', updates);
+            if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
+                console.log('Work Notes: メタフィールド更新', updates);
+            }
         };
         
         // 投稿保存後のAJAX作業メモ作成
@@ -107,12 +109,16 @@
                     work_date: currentWorkDate
                 };
                 
-                if (window.ofwnDebug) console.log('Work Notes: AJAX作業メモ作成開始', ajaxData);
+                if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
+                    console.log('Work Notes: AJAX作業メモ作成開始', ajaxData);
+                }
                 
                 // jQuery AJAXを使用（より確実な方法）
                 jQuery.post(window.ajaxurl || '/wp-admin/admin-ajax.php', ajaxData)
                     .done(function(response) {
-                        if (window.ofwnDebug) console.log('Work Notes: AJAX作業メモ作成成功', response);
+                        if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
+                            console.log('Work Notes: AJAX作業メモ作成成功', response);
+                        }
                         if (response.success && !response.data.duplicate) {
                             // 成功通知
                             wp.data.dispatch('core/notices').createNotice(
@@ -121,17 +127,23 @@
                                 { type: 'snackbar', isDismissible: true }
                             );
                         } else if (response.data && response.data.duplicate) {
-                            if (window.ofwnDebug) console.log('Work Notes: 重複のため作成をスキップ');
+                            if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
+                                console.log('Work Notes: 重複のため作成をスキップ');
+                            }
                         } else {
-                            if (window.ofwnDebug) console.warn('Work Notes: 作業メモ作成に失敗', response.data?.message || '不明なエラー');
+                            if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
+                                console.warn('Work Notes: 作業メモ作成に失敗', response.data?.message || '不明なエラー');
+                            }
                         }
                     })
                     .fail(function(xhr, status, error) {
-                        if (window.ofwnDebug) console.error('Work Notes: AJAX作業メモ作成エラー', {
-                            status: status,
-                            error: error,
-                            responseText: xhr.responseText
-                        });
+                        if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
+                            console.error('Work Notes: AJAX作業メモ作成エラー', {
+                                status: status,
+                                error: error,
+                                responseText: xhr.responseText
+                            });
+                        }
                         wp.data.dispatch('core/notices').createNotice(
                             'error',
                             '作業メモの作成に失敗しました: ' + error,
@@ -179,7 +191,9 @@
             
             if (hasUpdates) {
                 setMeta(updates);
-                if (window.ofwnDebug) console.log('Work Notes: 初期値を適用しました', updates);
+                if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
+                    console.log('Work Notes: 初期値を適用しました', updates);
+                }
             }
             
             setPrefillApplied(true);
@@ -198,9 +212,13 @@
                         }
                     }
                 }).then(response => {
-                    if (window.ofwnDebug) console.log('Work Notes: lazy backfill完了', response);
+                    if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
+                        console.log('Work Notes: lazy backfill完了', response);
+                    }
                 }).catch(error => {
-                    if (window.ofwnDebug) console.warn('Work Notes: lazy backfill失敗', error);
+                    if (window?.wp?.hooks?.applyFilters?.('ofwn_debug', (window.WP_DEBUG && window.SCRIPT_DEBUG) || false)) {
+                        console.warn('Work Notes: lazy backfill失敗', error);
+                    }
                 });
             }
             
