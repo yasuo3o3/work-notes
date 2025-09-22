@@ -70,3 +70,4 @@ add_action('plugins_loaded', function () {
     //     new OFWN_Updater(__FILE__, OFWN_VER);
     // }
 });
+
