@@ -1310,8 +1310,10 @@ class OF_Work_Notes {
         if (isset($_GET['post'])) {
             $current_post_id = absint(wp_unslash($_GET['post']));
         } elseif (isset($_POST['post_ID'])) {
-            // nonce検証は上位メソッドで実施済み
-            $current_post_id = absint(wp_unslash($_POST['post_ID']));
+            // nonce検証を明示的に実行
+            if (isset($_POST[self::NONCE]) && wp_verify_nonce(wp_unslash($_POST[self::NONCE]), self::NONCE)) {
+                $current_post_id = absint(wp_unslash($_POST['post_ID']));
+            }
         }
         
         // 初期値用の最新作業メモを取得
