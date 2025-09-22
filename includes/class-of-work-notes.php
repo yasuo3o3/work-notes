@@ -1895,7 +1895,7 @@ class OF_Work_Notes {
         // 2. $_POSTから取得を試行
         if (empty($work_title) && empty($work_content)) {
             // nonce検証を明示的に実行
-            if (isset($_POST[self::NONCE]) && wp_verify_nonce(wp_unslash($_POST[self::NONCE]), self::NONCE)) {
+            if (isset($_POST[self::NONCE]) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST[self::NONCE])), self::NONCE)) {
                 // $_POST['meta'] を unslash→sanitize（ネスト浅想定）
                 // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
                 $meta = isset($_POST['meta']) ? wp_unslash($_POST['meta']) : [];
