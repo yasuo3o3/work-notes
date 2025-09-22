@@ -89,5 +89,5 @@ if ( is_array($__ofwn_all2) ) {
         }
     }
 }
-// プラグイン削除後のキャッシュクリア
-wp_cache_flush();
+// プラグイン削除後のキャッシュクリア（uninstall.phpでは使用禁止のため削除）
+// wp_cache_flush();

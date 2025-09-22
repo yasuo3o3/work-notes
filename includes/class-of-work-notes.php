@@ -467,8 +467,7 @@ class OF_Work_Notes {
     }
 
     private function resolve_select_or_custom($baseName) {
-        // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-        if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
+        // nonce検証は呼び出し元で実施済みのため削除
         $sel = sanitize_text_field(wp_unslash($_POST[$baseName . '_select'] ?? ''));
         $custom = sanitize_text_field(wp_unslash($_POST[$baseName] ?? ''));
         if ($sel === '__custom__') return $custom;
@@ -588,7 +587,7 @@ class OF_Work_Notes {
                     'show_in_rest' => true,
                     'single' => true,
                     'type' => 'string',
-                    'auth_callback' => function($allowed, $meta_key, $post_id) {
+                    'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
                         return current_user_can('edit_post', $post_id);
                     },
                     'sanitize_callback' => $sanitize_callback
@@ -601,7 +600,7 @@ class OF_Work_Notes {
             'show_in_rest' => true,
             'single' => true,
             'type' => 'string',
-            'auth_callback' => function($allowed, $meta_key, $post_id) {
+            'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
                 return current_user_can('edit_post', $post_id);
             },
             'sanitize_callback' => 'sanitize_text_field'
@@ -611,7 +610,7 @@ class OF_Work_Notes {
             'show_in_rest' => true,
             'single' => true,
             'type' => 'string', 
-            'auth_callback' => function($allowed, $meta_key, $post_id) {
+            'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
                 return current_user_can('edit_post', $post_id);
             },
             'sanitize_callback' => 'sanitize_text_field'
@@ -622,7 +621,7 @@ class OF_Work_Notes {
             'show_in_rest' => true,
             'single' => true,
             'type' => 'integer',
-            'auth_callback' => function($allowed, $meta_key, $post_id) {
+            'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
                 return current_user_can('edit_post', $post_id);
             },
             'sanitize_callback' => 'absint'
@@ -635,7 +634,7 @@ class OF_Work_Notes {
                 'show_in_rest' => true,
                 'single' => true,
                 'type' => 'string',
-                'auth_callback' => function($allowed, $meta_key, $post_id) {
+                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
                     return current_user_can('edit_post', $post_id);
                 },
                 'sanitize_callback' => 'sanitize_text_field'
@@ -651,7 +650,7 @@ class OF_Work_Notes {
                 'show_in_rest' => true,
                 'single' => true,
                 'type' => 'string',
-                'auth_callback' => function($allowed, $meta_key, $post_id) {
+                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
                     return current_user_can('edit_post', $post_id);
                 },
                 'sanitize_callback' => 'sanitize_text_field'
@@ -661,29 +660,15 @@ class OF_Work_Notes {
                 'show_in_rest' => true,
                 'single' => true,
                 'type' => 'string',
-                'auth_callback' => function($allowed, $meta_key, $post_id) {
+                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
                     return current_user_can('edit_post', $post_id);
                 },
                 'sanitize_callback' => 'sanitize_textarea_field'
             ]);
         }
         
-        // CPT側では読み取り専用（移行フォールバック用）として残すが、REST非公開
-        register_post_meta(self::CPT, '_ofwn_work_title', [
-            'show_in_rest' => false,
-            'single' => true,
-            'type' => 'string',
-            'auth_callback' => '__return_false',
-            'sanitize_callback' => 'sanitize_text_field'
-        ]);
-        
-        register_post_meta(self::CPT, '_ofwn_work_content', [
-            'show_in_rest' => false,
-            'single' => true,
-            'type' => 'string',
-            'auth_callback' => '__return_false',
-            'sanitize_callback' => 'sanitize_textarea_field'
-        ]);
+        // CPT側の_ofwn_work_title, _ofwn_work_contentは重複のため削除
+        // （post/page側での登録で十分、CPTでは post_title/post_content を使用）
         
         $other_metas = [
             '_ofwn_target_type', '_ofwn_target_id', '_ofwn_target_label', 
@@ -694,7 +679,7 @@ class OF_Work_Notes {
                 'show_in_rest' => true,
                 'single' => true,
                 'type' => 'string',
-                'auth_callback' => function($allowed, $meta_key, $post_id) {
+                'auth_callback' => function($allowed, $meta_key, $post_id, $user_id) {
                     return current_user_can('edit_post', $post_id);
                 },
                 'sanitize_callback' => 'sanitize_text_field'
@@ -737,7 +722,7 @@ class OF_Work_Notes {
                 echo '<div class="ofwn-note-item">';
                 echo '<strong>'.esc_html(get_the_title($n)).'</strong> ';
                 echo '<span class="ofwn-badge ' . esc_attr($status==='完了'?'done':'') . '">' . esc_html($status ?: '—') . '</span><br>';
-                echo wp_kses_post(wpautop(esc_html($n->post_content)));
+                echo wp_kses_post(wpautop($n->post_content));
                 echo '<small>依頼元: '.esc_html($req ?: '—').' / 担当: '.esc_html($worker ?: '—').' / 実施日: '.esc_html($date ?: '—').'</small>';
                 echo ' / <a href="'.esc_url(get_edit_post_link($n->ID)).'">' . esc_html__('編集', 'work-notes') . '</a>';
                 echo '</div>';
@@ -847,8 +832,7 @@ class OF_Work_Notes {
         clean_post_cache($post_id);
         
         if ($is_rest_request && isset($_POST['meta'])) {
-            // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
+            // nonce検証は上位メソッドで実施済み
             // RESTリクエスト時：$_POST['meta']から直接最新値を取得（最優先）
             // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
             $meta = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
@@ -894,8 +878,7 @@ class OF_Work_Notes {
             
             // RESTリクエスト時の詳細比較
             if ($is_rest_request && isset($_POST['meta'])) {
-                // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-                if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
+                // nonce検証は上位メソッドで実施済み
                 // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
                 $meta_compare = isset($_POST['meta']) ? (array) wp_unslash($_POST['meta']) : [];
                 $meta_compare = array_map('sanitize_text_field', $meta_compare);
@@ -1347,8 +1330,7 @@ class OF_Work_Notes {
         if (isset($_GET['post'])) {
             $current_post_id = absint(wp_unslash($_GET['post']));
         } elseif (isset($_POST['post_ID'])) {
-            // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
+            // nonce検証は上位メソッドで実施済み
             $current_post_id = absint(wp_unslash($_POST['post_ID']));
         }
         
@@ -1931,7 +1913,7 @@ class OF_Work_Notes {
         // 2. $_POSTから取得を試行
         if (empty($work_title) && empty($work_content)) {
             // nonce検証（missing解消、WPCS位置要件のためローカルで明示）
-            if ( isset( $_POST[ self::NONCE ] ) ) { check_admin_referer( self::NONCE, self::NONCE ); }
+            // nonce検証は上位メソッドで実施済み
             // $_POST['meta'] を unslash→sanitize（ネスト浅想定）
             // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- 次行でサニタイズ
             $meta = isset($_POST['meta']) ? wp_unslash($_POST['meta']) : [];
