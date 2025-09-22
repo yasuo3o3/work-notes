@@ -4,7 +4,6 @@
 /.history export-ignore
 
 # 開発・テスト関連
-/assets export-ignore
 /docs export-ignore
 /tests export-ignore
 /updates export-ignore
