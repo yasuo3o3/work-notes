@@ -1,2 +1,234 @@
-/vendor
-/composer.*
+# ===== 共通 =====
+
+# WordPress.org SVN配布除外設定
+# プラグインZIPから除外するファイル・ディレクトリを指定
+
+# バージョン管理
+.git/
+.svn/
+.gitignore
+.gitattributes
+.distignore
+
+# 開発ツール・依存関係
+vendor/
+composer.json
+composer.lock
+node_modules/
+package.json
+package-lock.json
+yarn.lock
+.npmrc
+.yarnrc
+
+# ビルドツール
+Gruntfile.js
+gulpfile.js
+webpack.config.js
+rollup.config.js
+vite.config.js
+turbo.json
+lerna.json
+
+# 開発アセット・ソースファイル
+src/
+dev/
+development/
+scss/
+sass/
+less/
+*.scss
+*.sass
+*.less
+
+# ビルド成果物
+build/
+dist/
+.cache/
+zips/
+
+# テスト関連
+tests/
+test/
+spec/
+phpunit.xml
+phpunit.xml.dist
+.phpunit.result.cache
+jest.config.js
+karma.conf.js
+*.test.js
+*.spec.js
+fixtures/
+__tests__/
+__mocks__/
+
+# PHP品質ツール
+phpcs.xml
+phpcs.xml.dist
+.phpcs.xml
+phpstan.neon
+phpstan-bootstrap.php
+.php-cs-fixer.cache
+
+# JavaScript品質ツール
+.eslintrc
+.eslintrc.js
+.eslintrc.json
+.eslintignore
+.jshintrc
+.stylelintrc
+.stylelintrc.json
+.stylelintignore
+.prettierrc
+.prettierrc.js
+.prettierrc.json
+.prettierignore
+
+# IDE・エディタ
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.history/
+*.swp
+*.swo
+*~
+.editorconfig
+
+# OS・システム生成ファイル
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+.codecov.yml
+appveyor.yml
+codecov.yml
+sonar-project.properties
+
+# ログ・テンポラリファイル
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+debug.log
+error_log
+tmp/
+temp/
+cache/
+
+# アーカイブ・バックアップ
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.bak
+*.backup
+*~
+
+# WordPress開発関連
+wp-cli.yml
+wp-config-sample.php
+wp-config-local.php
+local-config.php
+
+# セキュリティ・環境ファイル
+.env
+.env.*
+*.pem
+*.key
+*.crt
+.htaccess
+.htpasswd
+
+# SVN構造（WordPress.org）
+tags/
+branches/
+trunk/
+
+# 開発ツール・スクリプト
+debug-tools/
+development-tools/
+build-tools/
+bin/
+scripts/
+
+# ソースマップ
+*.min.js.map
+*.min.css.map
+*.css.map
+*.js.map
+*.map
+
+# ロックファイル
+*.lock
+
+# テンポラリビルドファイル
+*.tmp
+*.temp
+
+# カバレッジレポート
+coverage/
+*.lcov
+.nyc_output
+
+# Node.js関連
+.npm
+.node_repl_history
+.yarn-integrity
+
+# Docker・仮想化
+Dockerfile
+docker-compose.yml
+.dockerignore
+Vagrantfile
+.vagrant/
+
+# Git hooks・ツール設定
+.huskyrc
+.commitlintrc
+.commitlintrc.js
+.commitlintrc.json
+renovate.json
+dependabot.yml
+
+# ドキュメント（開発用）
+CHANGELOG.md
+CONTRIBUTING.md
+DEVELOPER.md
+TESTING.md
+TODO.md
+README.md
+SECURITY.md
+REPORT.md
+VERSION-UP.md
+docs/
+doc/
+
+# Claude Code関連
+.claude/
+.history/
+CLAUDE.md
+REVIEW.md
+NETSERVICE.md
+WORDPRESS.md
+AGENTS.md
+YASUO3O3.md
+LICENSE
+
+# ===== work-notes 専用 =====
+updates/
+UNINSTALL-CHECKLIST.md
+update-changelog.sh
+# （プラグイン固有のルールをここに追加）

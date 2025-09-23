@@ -1,67 +1,128 @@
-# Wordpress - ignore core, configuration, examples, uploads and logs.
-# https://github.com/github/gitignore/blob/main/WordPress.gitignore
+# ===== 共通 =====
 
-# Core
-#
-# Note: if you want to stage/commit WP core files
-# you can delete this whole section/until Configuration.
-/wp-admin/
-/wp-content/index.php
-/wp-content/languages
-/wp-content/plugins/index.php
-/wp-content/themes/index.php
-/wp-includes/
-/index.php
-/license.txt
-/readme.html
-/wp-*.php
-/xmlrpc.php
+# OS・デスクトップ関連
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Configuration
-wp-config.php
+# IDE・エディタ関連
+.vscode/
+.idea/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+.atom/
+*.swp
+*.swo
+*~
+*.iml
+*.ipr
+*.iws
+.project
+.metadata
+.settings/
+.loadpath
+.recommenders
+/nbproject/private/
+/nbbuild/
+/.nb-gradle/
+local.properties
 
-# Example themes
-/wp-content/themes/twenty*/
-
-# Example plugin
-/wp-content/plugins/hello.php
-
-# Uploads
-/wp-content/uploads/
-
-# Log files
-*.log
-
-# htaccess
-/.htaccess
-
-
-updates/
-updates/stable.json
-updates/beta.json
-# All plugins
-#
-# Note: If you wish to whitelist plugins,
-# uncomment the next line
-#/wp-content/plugins
-
-# All themes
-#
-# Note: If you wish to whitelist themes,
-# uncomment the next line
-#/wp-content/themes
-
-update-changelog.sh
-/.history/
-.history/
-/vendor
-/composer.lock
-/vendor
-/zips/
-
-
-GUTENBERG-CPT-FIX-TEST.md
-PREFILL-TEST.md
-UNINSTALL-CHECKLIST.md
+# 依存関係・パッケージマネージャ
+vendor/
 composer.lock
-.github/
+node_modules/
+package.json
+package-lock.json
+yarn.lock
+jspm_packages/
+
+# ログ・デバッグ
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log
+debug.log
+error_log
+logs/
+
+# ビルド・成果物
+build/
+dist/
+/zips/
+temp-extract/
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.tgz
+
+# テンポラリ・キャッシュ
+*.tmp
+*.temp
+temp/
+tmp/
+.cache/
+.parcel-cache
+.sass-cache/
+.npm
+.nyc_output
+
+# テスト・品質ツール
+.phpunit.result.cache
+.php-cs-fixer.cache
+.phpcs-cache
+coverage/
+*.lcov
+phpunit.xml
+phpunit.xml.dist
+/tests/
+/test/
+
+# バックアップ
+*.bak
+*.backup
+~*
+
+# セキュリティ・環境設定
+.env
+.env.*
+.htpasswd
+*.pem
+*.key
+*.crt
+
+# CSS・アセット関連
+*.css.map
+*.sass.map
+*.scss.map
+*.min.js
+*.min.css
+
+# Claude Code関連
+.claude/
+.history/
+CLAUDE.md
+REVIEW.md
+NETSERVICE.md
+YASUO3O3.md
+WORDPRESS.md
+AGENTS.md
+REPORT.md
+LICENSE
+
+# デバッグツール・その他
+/debug-tools/
+/docs/
+VERSION-UP.md
+
+# ===== work-notes 専用 =====
+/updates/
+UNINSTALL-CHECKLIST.md
+update-changelog.sh
+# （プラグイン固有のルールをここに追加）
